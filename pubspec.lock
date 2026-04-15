@@ -33,22 +33,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.13.1"
-  badges:
-    dependency: transitive
-    description:
-      name: badges
-      sha256: cf1c88fb3777df69ccd630b80de5267f54efa4a39381b0404a7c03d56cb7c041
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.2.0"
-  bishop:
-    dependency: "direct main"
-    description:
-      name: bishop
-      sha256: "49739eff3ff06ec44f1660ff06baec6b44bb8926114b5f6bbed96f24d11a98d3"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.4.4"
   boolean_selector:
     dependency: transitive
     description:
@@ -137,6 +121,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.4"
+  chess:
+    dependency: "direct main"
+    description:
+      name: chess
+      sha256: "6e5a8222931bfb5cd14a4bb9b030c24e257e23957ec3c533fb0ff74a48984ddb"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.8.1"
   clock:
     dependency: transitive
     description:
@@ -201,14 +193,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.3.6"
-  equatable:
-    dependency: transitive
-    description:
-      name: equatable
-      sha256: "3e0141505477fd8ad55d6eb4e7776d3fe8430be8e497ccb1521370c3f21a3e2b"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.8"
   fake_async:
     dependency: transitive
     description:
@@ -656,22 +640,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.10.2"
-  square_bishop:
-    dependency: "direct main"
-    description:
-      name: square_bishop
-      sha256: "6534c58cdd80da1dd19b8b81b031c85ccb2efc1bf96309e60756d96a3b0d78b5"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.3.0"
-  squares:
-    dependency: transitive
-    description:
-      name: squares
-      sha256: "5496b2907fceab92d1190625847cda51d84bb5a5364bd1af199b82ed2fdbf68e"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.2.1"
   stack_trace:
     dependency: transitive
     description:

@@ -1,5 +1,5 @@
-name: chess_coach
-description: "A Flutter chess coaching application powered by Stockfish."
+name: chesscoach_ai
+description: "Learn chess with AI coaching. Play against smart AI opponents and get real-time feedback."
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -11,8 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   stockfish: ^1.0.2
-  square_bishop: ^0.3.0
-  bishop: ^1.4.4
+  chess: ^0.8.1
   provider: ^6.0.10
   hive: ^2.2.3
   hive_flutter: ^1.1.0

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/move.dart';
+import '../services/ai_service.dart';
 import '../services/game_service.dart';
 import '../utils/constants.dart';
 import '../widgets/chess_board.dart';
@@ -17,38 +18,35 @@ class _GameScreenState extends State<GameScreen> {
   String? _selectedSquare;
   Set<String> _validMoves = {};
   String? _statusMessage;
+  bool _aiThinking = false;
+  AIDifficulty _difficulty = AIDifficulty.easy;
+
+  // ── Player move handler ────────────────────────────────────────────────────
 
   void _onSquareTapped(String square) {
-    if (_game.isGameOver) return;
+    // Block taps while AI is thinking or it's not the player's turn
+    if (_aiThinking || _game.isGameOver || !_game.isWhiteTurn) return;
 
     setState(() {
       if (_selectedSquare == null) {
-        // First tap: select a piece
         final moves = _game.getLegalMoves(square);
         if (moves.isNotEmpty) {
           _selectedSquare = square;
           _validMoves = moves.toSet();
           _statusMessage = null;
-        } else {
-          // Empty square or opponent piece with no moves — ignore
-          _selectedSquare = null;
-          _validMoves = {};
         }
       } else if (_selectedSquare == square) {
-        // Tapped selected square again — deselect
         _selectedSquare = null;
         _validMoves = {};
       } else if (_validMoves.contains(square)) {
-        // Second tap on a valid destination: execute move
         final move = _game.makeMove(_selectedSquare!, square);
         _selectedSquare = null;
         _validMoves = {};
-
         if (move != null) {
           _updateStatus();
+          if (!_game.isGameOver) _scheduleAIMove();
         }
       } else {
-        // Tapped a different square — try selecting it instead
         final moves = _game.getLegalMoves(square);
         if (moves.isNotEmpty) {
           _selectedSquare = square;
@@ -62,14 +60,40 @@ class _GameScreenState extends State<GameScreen> {
     });
   }
 
+  // ── AI move ────────────────────────────────────────────────────────────────
+
+  void _scheduleAIMove() {
+    setState(() => _aiThinking = true);
+    Future.delayed(const Duration(milliseconds: 800), _executeAIMove);
+  }
+
+  void _executeAIMove() {
+    if (!mounted || _game.isGameOver) {
+      if (mounted) setState(() => _aiThinking = false);
+      return;
+    }
+
+    final aiMove = AIService.getAIMove(_game.fen, _difficulty);
+    if (aiMove != null) {
+      _game.makeMove(aiMove['from']!, aiMove['to']!);
+    }
+
+    setState(() {
+      _aiThinking = false;
+      _updateStatus();
+    });
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
   void _updateStatus() {
     if (_game.isCheckmate()) {
-      final winner = _game.turn == 'white' ? 'Black' : 'White';
-      _statusMessage = 'Checkmate! $winner wins.';
+      final winner = _game.turn == 'white' ? 'Black (AI)' : 'White (You)';
+      _statusMessage = 'Checkmate! $winner wins!';
     } else if (_game.isDraw()) {
       _statusMessage = 'Draw!';
     } else if (_game.isInCheck()) {
-      _statusMessage = 'Check!';
+      _statusMessage = _game.turn == 'white' ? 'Check! Your king is in check.' : 'Check!';
     } else {
       _statusMessage = null;
     }
@@ -81,8 +105,11 @@ class _GameScreenState extends State<GameScreen> {
       _selectedSquare = null;
       _validMoves = {};
       _statusMessage = null;
+      _aiThinking = false;
     });
   }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -94,7 +121,7 @@ class _GameScreenState extends State<GameScreen> {
       appBar: AppBar(
         backgroundColor: kAppSurface,
         title: const Text(
-          'Chess Coach',
+          'Chess Coach AI',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
@@ -109,38 +136,64 @@ class _GameScreenState extends State<GameScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
 
-            // Black player
+            // Difficulty selector
+            _DifficultySelector(
+              selected: _difficulty,
+              onChanged: (d) {
+                setState(() {
+                  _difficulty = d;
+                  _reset();
+                });
+              },
+            ),
+
+            const SizedBox(height: 8),
+
+            // Black / AI player
             _PlayerBar(
-              name: 'Black',
+              name: _aiThinking ? 'AI thinking...' : 'Black (AI)',
               isActive: !isWhiteTurn && !_game.isGameOver,
+              isThinking: _aiThinking,
               color: Colors.black,
             ),
 
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
 
             // Board
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: ChessBoard(
-                fen: _game.fen,
-                selectedSquare: _selectedSquare,
-                validMoves: _validMoves,
-                onSquareTapped: _onSquareTapped,
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 500),
+                  child: AbsorbPointer(
+                    absorbing: _aiThinking || !_game.isWhiteTurn,
+                    child: Opacity(
+                      opacity: _aiThinking ? 0.85 : 1.0,
+                      child: ChessBoard(
+                        fen: _game.fen,
+                        selectedSquare: _selectedSquare,
+                        validMoves: _validMoves,
+                        onSquareTapped: _onSquareTapped,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
 
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
 
-            // White player
+            // White / Human player
             _PlayerBar(
-              name: 'White',
+              name: 'White (You)',
               isActive: isWhiteTurn && !_game.isGameOver,
+              isThinking: false,
               color: Colors.white,
             ),
 
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
 
             // Status banner
             if (_statusMessage != null)
@@ -152,7 +205,8 @@ class _GameScreenState extends State<GameScreen> {
                 decoration: BoxDecoration(
                   color: kAppPrimary.withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: kAppPrimary.withValues(alpha: 0.5)),
+                  border:
+                      Border.all(color: kAppPrimary.withValues(alpha: 0.5)),
                 ),
                 child: Text(
                   _statusMessage!,
@@ -165,7 +219,7 @@ class _GameScreenState extends State<GameScreen> {
                 ),
               ),
 
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
 
             // Move history
             Expanded(
@@ -179,8 +233,9 @@ class _GameScreenState extends State<GameScreen> {
                 child: history.isEmpty
                     ? const Center(
                         child: Text(
-                          'No moves yet',
-                          style: TextStyle(color: Colors.white38, fontSize: 13),
+                          'Make a move to start',
+                          style:
+                              TextStyle(color: Colors.white38, fontSize: 13),
                         ),
                       )
                     : _MoveHistoryList(moves: history),
@@ -195,14 +250,85 @@ class _GameScreenState extends State<GameScreen> {
 
 // ── Sub-widgets ───────────────────────────────────────────────────────────────
 
+class _DifficultySelector extends StatelessWidget {
+  final AIDifficulty selected;
+  final ValueChanged<AIDifficulty> onChanged;
+
+  const _DifficultySelector({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  static const _labels = {
+    AIDifficulty.beginner: 'Beginner',
+    AIDifficulty.easy: 'Easy',
+    AIDifficulty.intermediate: 'Intermediate',
+    AIDifficulty.advanced: 'Advanced',
+  };
+
+  static const _colors = {
+    AIDifficulty.beginner: Colors.green,
+    AIDifficulty.easy: Colors.lightBlue,
+    AIDifficulty.intermediate: Colors.orange,
+    AIDifficulty.advanced: Colors.red,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: AIDifficulty.values.map((d) {
+          final isSelected = d == selected;
+          final color = _colors[d]!;
+          return Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: GestureDetector(
+              onTap: () => onChanged(d),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? color.withValues(alpha: 0.25)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isSelected ? color : Colors.white24,
+                    width: isSelected ? 1.5 : 1,
+                  ),
+                ),
+                child: Text(
+                  _labels[d]!,
+                  style: TextStyle(
+                    color: isSelected ? color : Colors.white38,
+                    fontSize: 12,
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
 class _PlayerBar extends StatelessWidget {
   final String name;
   final bool isActive;
+  final bool isThinking;
   final Color color;
 
   const _PlayerBar({
     required this.name,
     required this.isActive,
+    required this.isThinking,
     required this.color,
   });
 
@@ -239,15 +365,18 @@ class _PlayerBar extends StatelessWidget {
             style: TextStyle(
               color: isActive ? Colors.white : Colors.white38,
               fontSize: 13,
-              fontWeight:
-                  isActive ? FontWeight.bold : FontWeight.normal,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
             ),
           ),
-          if (isActive) ...[
-            const SizedBox(width: 6),
-            const Text(
-              'to move',
-              style: TextStyle(color: Colors.white38, fontSize: 12),
+          if (isThinking) ...[
+            const SizedBox(width: 8),
+            const SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: kAppPrimary,
+              ),
             ),
           ],
         ],
@@ -262,7 +391,6 @@ class _MoveHistoryList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Group into pairs (white move, black move)
     final rows = <(int, Move, Move?)>[];
     for (int i = 0; i < moves.length; i += 2) {
       rows.add((
@@ -285,10 +413,12 @@ class _MoveHistoryList extends StatelessWidget {
                 width: 28,
                 child: Text(
                   '$num.',
-                  style: const TextStyle(color: Colors.white38, fontSize: 12),
+                  style:
+                      const TextStyle(color: Colors.white38, fontSize: 12),
                 ),
               ),
-              _MoveChip(notation: white.notation, isCapture: white.isCapture),
+              _MoveChip(
+                  notation: white.notation, isCapture: white.isCapture),
               const SizedBox(width: 6),
               if (black != null)
                 _MoveChip(

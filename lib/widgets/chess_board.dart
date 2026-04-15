@@ -128,22 +128,44 @@ class _ChessSquare extends StatelessWidget {
 
             // Piece glyph
             if (piece != null)
-              Center(
-                child: Text(
-                  kPieceSymbols[piece] ?? '',
-                  style: TextStyle(
-                    fontSize: size * 0.72,
-                    height: 1,
-                    shadows: [
-                      Shadow(
-                        color: Colors.black.withValues(alpha: 0.4),
-                        offset: const Offset(1, 1),
-                        blurRadius: 2,
-                      ),
-                    ],
+              Builder(builder: (context) {
+                final isWhitePiece = piece == piece!.toUpperCase();
+                return Center(
+                  child: Text(
+                    kPieceSymbols[piece] ?? '',
+                    style: TextStyle(
+                      fontSize: size * 0.72,
+                      height: 1,
+                      color: isWhitePiece ? Colors.white : Colors.black,
+                      shadows: isWhitePiece
+                        ? [
+                            Shadow(
+                              color: Colors.black.withValues(alpha: 0.85),
+                              offset: const Offset(1, 1),
+                              blurRadius: 2,
+                            ),
+                            Shadow(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              offset: const Offset(-0.5, -0.5),
+                              blurRadius: 1,
+                            ),
+                          ]
+                        : [
+                            Shadow(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              offset: const Offset(1, 1),
+                              blurRadius: 2,
+                            ),
+                            Shadow(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              offset: const Offset(-0.5, -0.5),
+                              blurRadius: 1,
+                            ),
+                          ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              }),
 
             // Rank number (top-left of leftmost column)
             if (rankLabel != null)
