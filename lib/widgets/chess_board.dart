@@ -1,27 +1,23 @@
 import 'package:flutter/material.dart';
 import '../utils/constants.dart';
 
-class ChessBoard extends StatefulWidget {
+/// A pure display widget. All selection/move state is managed by the parent.
+class ChessBoard extends StatelessWidget {
   final String fen;
-  final void Function(String algebraic)? onSquareTapped;
+  final String? selectedSquare;
+  final Set<String> validMoves;
+  final void Function(String algebraic) onSquareTapped;
   final bool flipped;
 
   const ChessBoard({
     super.key,
     required this.fen,
-    this.onSquareTapped,
+    required this.onSquareTapped,
+    this.selectedSquare,
+    this.validMoves = const {},
     this.flipped = false,
   });
 
-  @override
-  State<ChessBoard> createState() => _ChessBoardState();
-}
-
-class _ChessBoardState extends State<ChessBoard> {
-  String? _selectedSquare;
-  Set<String> _validMoves = {};
-
-  // Parse FEN into a rank-file map: e.g. {'e1': 'K', 'e8': 'k', ...}
   Map<String, String> _parseFen(String fen) {
     final Map<String, String> board = {};
     final String position = fen.split(' ').first;
@@ -36,9 +32,7 @@ class _ChessBoardState extends State<ChessBoard> {
         if (empty != null) {
           fileIdx += empty;
         } else {
-          final String square =
-              '${kFiles[fileIdx]}${8 - rankIdx}';
-          board[square] = char;
+          board['${kFiles[fileIdx]}${8 - rankIdx}'] = char;
           fileIdx++;
         }
       }
@@ -46,68 +40,39 @@ class _ChessBoardState extends State<ChessBoard> {
     return board;
   }
 
-  void _onTap(String square) {
-    setState(() {
-      if (_selectedSquare == square) {
-        // Deselect
-        _selectedSquare = null;
-        _validMoves = {};
-      } else if (_validMoves.contains(square)) {
-        // Move to valid destination — parent handles logic
-        _selectedSquare = null;
-        _validMoves = {};
-        widget.onSquareTapped?.call(square);
-      } else {
-        _selectedSquare = square;
-        _validMoves = {}; // Game logic will populate via parent
-        widget.onSquareTapped?.call(square);
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    final boardState = _parseFen(widget.fen);
+    final boardState = _parseFen(fen);
 
     return AspectRatio(
       aspectRatio: 1,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final squareSize = constraints.maxWidth / 8;
-          return Stack(
-            children: [
-              // Board squares
-              Column(
-                children: List.generate(8, (rowIdx) {
-                  final rank = widget.flipped ? rowIdx + 1 : 8 - rowIdx;
-                  return Row(
-                    children: List.generate(8, (colIdx) {
-                      final fileIdx =
-                          widget.flipped ? 7 - colIdx : colIdx;
-                      final square =
-                          '${kFiles[fileIdx]}$rank';
-                      final isLight = (fileIdx + rank) % 2 == 0;
-                      final isSelected = _selectedSquare == square;
-                      final isValidMove = _validMoves.contains(square);
-                      final piece = boardState[square];
+          return Column(
+            children: List.generate(8, (rowIdx) {
+              final rank = flipped ? rowIdx + 1 : 8 - rowIdx;
+              return Row(
+                children: List.generate(8, (colIdx) {
+                  final fileIdx = flipped ? 7 - colIdx : colIdx;
+                  final square = '${kFiles[fileIdx]}$rank';
+                  final isLight = (fileIdx + rank) % 2 == 0;
+                  final piece = boardState[square];
 
-                      return _ChessSquare(
-                        key: ValueKey(square),
-                        size: squareSize,
-                        isLight: isLight,
-                        isSelected: isSelected,
-                        isValidMove: isValidMove,
-                        piece: piece,
-                        showCoords: true,
-                        file: colIdx == 0 ? '$rank' : null,
-                        rank: rowIdx == 7 ? kFiles[fileIdx] : null,
-                        onTap: () => _onTap(square),
-                      );
-                    }),
+                  return _ChessSquare(
+                    key: ValueKey(square),
+                    size: squareSize,
+                    isLight: isLight,
+                    isSelected: selectedSquare == square,
+                    isValidMove: validMoves.contains(square),
+                    piece: piece,
+                    rankLabel: colIdx == 0 ? '$rank' : null,
+                    fileLabel: rowIdx == 7 ? kFiles[fileIdx] : null,
+                    onTap: () => onSquareTapped(square),
                   );
                 }),
-              ),
-            ],
+              );
+            }),
           );
         },
       ),
@@ -121,9 +86,8 @@ class _ChessSquare extends StatelessWidget {
   final bool isSelected;
   final bool isValidMove;
   final String? piece;
-  final String? file; // rank label on left edge
-  final String? rank; // file label on bottom edge
-  final bool showCoords;
+  final String? rankLabel; // shown top-left (rank number)
+  final String? fileLabel; // shown bottom-right (file letter)
   final VoidCallback onTap;
 
   const _ChessSquare({
@@ -134,9 +98,8 @@ class _ChessSquare extends StatelessWidget {
     required this.isValidMove,
     required this.onTap,
     this.piece,
-    this.file,
-    this.rank,
-    this.showCoords = true,
+    this.rankLabel,
+    this.fileLabel,
   });
 
   Color get _baseColor => isLight ? kLightSquare : kDarkSquare;
@@ -144,8 +107,7 @@ class _ChessSquare extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color bgColor = _baseColor;
-    if (isSelected) bgColor = kSelectedSquare;
+    final bgColor = isSelected ? kSelectedSquare : _baseColor;
 
     return GestureDetector(
       onTap: onTap,
@@ -154,27 +116,17 @@ class _ChessSquare extends StatelessWidget {
         height: size,
         child: Stack(
           children: [
-            // Background
             Container(color: bgColor),
 
-            // Valid move indicator
+            // Valid move dot (circle) or capture ring (piece present)
             if (isValidMove)
               Center(
-                child: Container(
-                  width: size * kValidMoveDotFraction,
-                  height: size * kValidMoveDotFraction,
-                  decoration: BoxDecoration(
-                    color: piece != null
-                        ? kValidMoveColor.withValues(alpha: 0.6)
-                        : kValidMoveColor.withValues(alpha: 0.75),
-                    shape: piece != null
-                        ? BoxShape.rectangle
-                        : BoxShape.circle,
-                  ),
-                ),
+                child: piece != null
+                    ? _CaptureRing(size: size)
+                    : _MoveDot(size: size),
               ),
 
-            // Piece
+            // Piece glyph
             if (piece != null)
               Center(
                 child: Text(
@@ -193,13 +145,13 @@ class _ChessSquare extends StatelessWidget {
                 ),
               ),
 
-            // Rank label (left edge)
-            if (showCoords && file != null)
+            // Rank number (top-left of leftmost column)
+            if (rankLabel != null)
               Positioned(
                 top: 2,
                 left: 3,
                 child: Text(
-                  file!,
+                  rankLabel!,
                   style: TextStyle(
                     fontSize: size * 0.18,
                     fontWeight: FontWeight.bold,
@@ -208,13 +160,13 @@ class _ChessSquare extends StatelessWidget {
                 ),
               ),
 
-            // File label (bottom edge)
-            if (showCoords && rank != null)
+            // File letter (bottom-right of bottom row)
+            if (fileLabel != null)
               Positioned(
                 bottom: 2,
                 right: 3,
                 child: Text(
-                  rank!,
+                  fileLabel!,
                   style: TextStyle(
                     fontSize: size * 0.18,
                     fontWeight: FontWeight.bold,
@@ -223,6 +175,43 @@ class _ChessSquare extends StatelessWidget {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MoveDot extends StatelessWidget {
+  final double size;
+  const _MoveDot({required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size * kValidMoveDotFraction,
+      height: size * kValidMoveDotFraction,
+      decoration: BoxDecoration(
+        color: kValidMoveColor.withValues(alpha: 0.75),
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
+class _CaptureRing extends StatelessWidget {
+  final double size;
+  const _CaptureRing({required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size * 0.9,
+      height: size * 0.9,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: kValidMoveColor.withValues(alpha: 0.7),
+          width: size * 0.08,
         ),
       ),
     );

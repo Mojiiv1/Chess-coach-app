@@ -42,7 +42,7 @@ packages:
     source: hosted
     version: "3.2.0"
   bishop:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: bishop
       sha256: "49739eff3ff06ec44f1660ff06baec6b44bb8926114b5f6bbed96f24d11a98d3"
