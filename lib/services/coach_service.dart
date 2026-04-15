@@ -103,10 +103,10 @@ class CoachService {
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   static MoveQuality _qualityFromDelta(int delta) {
-    if (delta <= -300) return MoveQuality.blunder;
-    if (delta <= -100) return MoveQuality.mistake;
+    if (delta < -300) return MoveQuality.blunder;
+    if (delta < -100) return MoveQuality.mistake;
     if (delta < -20) return MoveQuality.inaccuracy;
-    if (delta < 100) return MoveQuality.good;
+    if (delta <= 20) return MoveQuality.good;
     return MoveQuality.excellent;
   }
 
@@ -155,7 +155,7 @@ class CoachService {
     }
     if (chess.in_draw) return 0;
 
-    const values = {'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 0};
+    const values = {'p': 100, 'n': 300, 'b': 300, 'r': 500, 'q': 900, 'k': 0};
     int score = 0;
     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
     for (final file in files) {
