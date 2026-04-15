@@ -134,10 +134,10 @@ class _ChessSquare extends StatelessWidget {
                   child: Text(
                     kPieceSymbols[piece] ?? '',
                     style: TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: size * 0.72,
-                      height: 1.0,
-                      fontWeight: FontWeight.bold,
+                      fontSize: size * 0.75,
+                      height: 1.2,
+                      letterSpacing: 0,
+                      fontWeight: FontWeight.normal,
                       color: isWhitePiece ? Colors.white : Colors.black,
                       shadows: isWhitePiece
                           ? [

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/move.dart';
 import '../services/ai_service.dart';
+import '../services/coach_service.dart';
 import '../services/game_service.dart';
 import '../utils/constants.dart';
 import '../widgets/chess_board.dart';
@@ -20,6 +21,7 @@ class _GameScreenState extends State<GameScreen> {
   String? _statusMessage;
   bool _aiThinking = false;
   AIDifficulty _difficulty = AIDifficulty.easy;
+  CoachFeedback? _lastFeedback;
 
   // ── Player move handler ────────────────────────────────────────────────────
 
@@ -39,10 +41,16 @@ class _GameScreenState extends State<GameScreen> {
         _selectedSquare = null;
         _validMoves = {};
       } else if (_validMoves.contains(square)) {
+        final fenBefore = _game.fen;
         final move = _game.makeMove(_selectedSquare!, square);
         _selectedSquare = null;
         _validMoves = {};
         if (move != null) {
+          _lastFeedback = CoachService.analyzeMove(
+            beforeFen: fenBefore,
+            move: move,
+            isPlayerWhite: true,
+          );
           _updateStatus();
           if (!_game.isGameOver) _scheduleAIMove();
         }
@@ -106,6 +114,7 @@ class _GameScreenState extends State<GameScreen> {
       _validMoves = {};
       _statusMessage = null;
       _aiThinking = false;
+      _lastFeedback = null;
     });
   }
 
@@ -218,6 +227,12 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                 ),
               ),
+
+            const SizedBox(height: 6),
+
+            // Coach feedback panel
+            if (_lastFeedback != null)
+              _CoachPanel(feedback: _lastFeedback!),
 
             const SizedBox(height: 6),
 
@@ -453,6 +468,60 @@ class _MoveChip extends StatelessWidget {
           fontSize: 13,
           fontFamily: 'monospace',
         ),
+      ),
+    );
+  }
+}
+
+class _CoachPanel extends StatelessWidget {
+  final CoachFeedback feedback;
+  const _CoachPanel({required this.feedback});
+
+  static const _qualityColors = {
+    MoveQuality.blunder: Color(0xFFE53935),
+    MoveQuality.mistake: Color(0xFFFF7043),
+    MoveQuality.inaccuracy: Color(0xFFFFB300),
+    MoveQuality.good: Color(0xFF66BB6A),
+    MoveQuality.excellent: Color(0xFF29B6F6),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _qualityColors[feedback.quality]!;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          Text(feedback.qualityEmoji, style: const TextStyle(fontSize: 20)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  feedback.qualityLabel,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  feedback.message,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
