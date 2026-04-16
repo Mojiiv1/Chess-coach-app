@@ -49,30 +49,43 @@ class ChessBoard extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final squareSize = constraints.maxWidth / 8;
-          return Column(
-            children: List.generate(8, (rowIdx) {
-              final rank = flipped ? rowIdx + 1 : 8 - rowIdx;
-              return Row(
-                children: List.generate(8, (colIdx) {
-                  final fileIdx = flipped ? 7 - colIdx : colIdx;
-                  final square = '${kFiles[fileIdx]}$rank';
-                  final isLight = (fileIdx + rank) % 2 == 0;
-                  final piece = boardState[square];
+          final boardSize = squareSize * 8;
 
-                  return _ChessSquare(
-                    key: ValueKey(square),
-                    size: squareSize,
-                    isLight: isLight,
-                    isSelected: selectedSquare == square,
-                    isValidMove: validMoves.contains(square),
-                    piece: piece,
-                    rankLabel: colIdx == 0 ? '$rank' : null,
-                    fileLabel: rowIdx == 7 ? kFiles[fileIdx] : null,
-                    onTap: () => onSquareTapped(square),
+          return Center(
+            child: SizedBox(
+              width: boardSize,
+              height: boardSize,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(8, (rowIdx) {
+                  final rank = flipped ? rowIdx + 1 : 8 - rowIdx;
+                  return SizedBox(
+                    height: squareSize,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: List.generate(8, (colIdx) {
+                        final fileIdx = flipped ? 7 - colIdx : colIdx;
+                        final square = '${kFiles[fileIdx]}$rank';
+                        final isLight = (fileIdx + rank) % 2 == 0;
+                        final piece = boardState[square];
+
+                        return _ChessSquare(
+                          key: ValueKey(square),
+                          size: squareSize,
+                          isLight: isLight,
+                          isSelected: selectedSquare == square,
+                          isValidMove: validMoves.contains(square),
+                          piece: piece,
+                          rankLabel: colIdx == 0 ? '$rank' : null,
+                          fileLabel: rowIdx == 7 ? kFiles[fileIdx] : null,
+                          onTap: () => onSquareTapped(square),
+                        );
+                      }),
+                    ),
                   );
                 }),
-              );
-            }),
+              ),
+            ),
           );
         },
       ),
