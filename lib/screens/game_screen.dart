@@ -40,33 +40,39 @@ class _GameScreenState extends State<GameScreen> {
 
   void _onSquareTapped(String square) {
     if (_aiThinking || _game.isGameOver) return;
-    if (_game.turn != 'white') return; // only player moves
+    if (_game.turn != 'white') return;
 
-    setState(() {
-      if (_selectedSquare == null) {
-        // Select piece
-        final moves = _game.getLegalMoves(square);
-        if (moves.isNotEmpty) {
+    if (_selectedSquare == null) {
+      // First tap — select a piece
+      final moves = _game.getLegalMoves(square);
+      if (moves.isNotEmpty) {
+        setState(() {
           _selectedSquare = square;
           _validMoves = moves;
-        }
-      } else if (_validMoves.contains(square)) {
-        // Execute move
-        _executePlayerMove(_selectedSquare!, square);
+        });
+      }
+    } else if (_selectedSquare == square) {
+      // Tap same square — deselect
+      setState(() {
         _selectedSquare = null;
         _validMoves = {};
-      } else {
-        // Re-select
-        final moves = _game.getLegalMoves(square);
-        if (moves.isNotEmpty) {
-          _selectedSquare = square;
-          _validMoves = moves;
-        } else {
-          _selectedSquare = null;
-          _validMoves = {};
-        }
-      }
-    });
+      });
+    } else if (_validMoves.contains(square)) {
+      // Valid destination — execute the move
+      final from = _selectedSquare!;
+      setState(() {
+        _selectedSquare = null;
+        _validMoves = {};
+      });
+      _executePlayerMove(from, square);
+    } else {
+      // Tap a different square — re-select if it has legal moves
+      final moves = _game.getLegalMoves(square);
+      setState(() {
+        _selectedSquare = moves.isNotEmpty ? square : null;
+        _validMoves = moves;
+      });
+    }
   }
 
   void _executePlayerMove(String from, String to) {
@@ -74,17 +80,20 @@ class _GameScreenState extends State<GameScreen> {
     final move = _game.makeMove(from, to);
     if (move == null) return;
 
-    // Coach analysis (non-blocking)
+    // Evaluate position and get coach feedback synchronously
     final feedback = CoachService.analyzeMove(
       beforeFen: beforeFen,
       from: from,
       to: to,
       isPlayerWhite: true,
     );
+    final newEval = AIService.evaluatePosition(_game.fen);
 
+    // Single setState to reflect the completed player move
     setState(() {
       _lastFeedback = feedback;
-      _evalBar = AIService.evaluatePosition(_game.fen);
+      _evalBar = newEval;
+      _aiThinking = !_game.isGameOver; // lock board for AI
     });
 
     _scrollHistoryToEnd();
@@ -94,36 +103,39 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
 
-    // Schedule AI response
-    setState(() => _aiThinking = true);
     Timer(const Duration(milliseconds: 700), _executeAIMove);
   }
 
   Future<void> _executeAIMove() async {
     if (!mounted) return;
 
-    final (uciMove, eval) = await Future.microtask(() => AIService.getAIMove(
-          _game.fen,
-          _difficulty,
-          _game.uciHistory,
-        ));
+    try {
+      // Run AI on a Future so the 700ms delay frame can render first
+      final (uciMove, _) = await Future(
+        () => AIService.getAIMove(_game.fen, _difficulty, _game.uciHistory),
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    if (uciMove.isNotEmpty) {
-      final from = uciMove.substring(0, 2);
-      final to = uciMove.substring(2, 4);
-      _game.makeMove(from, to);
+      if (uciMove.isNotEmpty) {
+        final from = uciMove.substring(0, 2);
+        final to = uciMove.substring(2, 4);
+        _game.makeMove(from, to);
+      }
+
+      final newEval = AIService.evaluatePosition(_game.fen);
+
+      setState(() {
+        _aiThinking = false;
+        _evalBar = newEval;
+      });
+
+      _scrollHistoryToEnd();
+      if (_game.isGameOver) _handleGameOver();
+    } catch (e) {
+      // Always unblock the board even if AI fails
+      if (mounted) setState(() => _aiThinking = false);
     }
-
-    setState(() {
-      _aiThinking = false;
-      _evalBar = AIService.evaluatePosition(_game.fen);
-    });
-
-    _scrollHistoryToEnd();
-
-    if (_game.isGameOver) _handleGameOver();
   }
 
   void _handleGameOver() {
