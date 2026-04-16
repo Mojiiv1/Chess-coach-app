@@ -1,0 +1,31 @@
+name: chesscoach_ai
+description: "Chess Coach AI - Play and learn chess with an intelligent coach"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  chess: ^0.8.1
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  flutter_animate: ^4.5.2
+  logger: ^2.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/chess_pieces/
