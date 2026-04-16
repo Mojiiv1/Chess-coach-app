@@ -69,6 +69,11 @@ class ChessBoard extends StatelessWidget {
                         final isLight = (fileIdx + rank) % 2 == 0;
                         final piece = boardState[square];
 
+                        if (rank == 8 && piece != null) {
+                          // ignore: avoid_print
+                          print('🔍 Rank 8 [$square]: piece=$piece → emoji=${kPieceEmoji[piece]}');
+                        }
+
                         return _ChessSquare(
                           key: ValueKey(square),
                           size: squareSize,
