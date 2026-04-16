@@ -1,26 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../utils/constants.dart';
 
 const Map<String, String> _pieceAsset = {
-  'K': 'assets/chess_pieces/white_king.svg',
-  'Q': 'assets/chess_pieces/white_queen.svg',
-  'R': 'assets/chess_pieces/white_rook.svg',
-  'B': 'assets/chess_pieces/white_bishop.svg',
-  'N': 'assets/chess_pieces/white_knight.svg',
-  'P': 'assets/chess_pieces/white_pawn.svg',
-  'k': 'assets/chess_pieces/black_king.svg',
-  'q': 'assets/chess_pieces/black_queen.svg',
-  'r': 'assets/chess_pieces/black_rook.svg',
-  'b': 'assets/chess_pieces/black_bishop.svg',
-  'n': 'assets/chess_pieces/black_knight.svg',
-  'p': 'assets/chess_pieces/black_pawn.svg',
+  'K': 'assets/chess_pieces/white_king.png',
+  'Q': 'assets/chess_pieces/white_queen.png',
+  'R': 'assets/chess_pieces/white_rook.png',
+  'B': 'assets/chess_pieces/white_bishop.png',
+  'N': 'assets/chess_pieces/white_knight.png',
+  'P': 'assets/chess_pieces/white_pawn.png',
+  'k': 'assets/chess_pieces/black_king.png',
+  'q': 'assets/chess_pieces/black_queen.png',
+  'r': 'assets/chess_pieces/black_rook.png',
+  'b': 'assets/chess_pieces/black_bishop.png',
+  'n': 'assets/chess_pieces/black_knight.png',
+  'p': 'assets/chess_pieces/black_pawn.png',
 };
 
 Widget _pieceWidget(String piece, double size) {
   final path = _pieceAsset[piece];
   if (path == null) return const SizedBox.shrink();
-  return SvgPicture.asset(path, width: size, height: size, fit: BoxFit.contain);
+  return Image.asset(path, width: size, height: size, fit: BoxFit.contain);
 }
 
 /// A pure display widget. All selection/move state is managed by the parent.
