@@ -2,12 +2,39 @@ import 'package:flutter/material.dart';
 import 'package:chess/chess.dart' as ch;
 import '../utils/constants.dart';
 
+// Map FEN piece letter → asset path (used when PNG files are present).
+// White pieces are uppercase letters, black are lowercase.
+const Map<String, String> _pieceAsset = {
+  'K': 'assets/chess_pieces/white_king.png',
+  'Q': 'assets/chess_pieces/white_queen.png',
+  'R': 'assets/chess_pieces/white_rook.png',
+  'B': 'assets/chess_pieces/white_bishop.png',
+  'N': 'assets/chess_pieces/white_knight.png',
+  'P': 'assets/chess_pieces/white_pawn.png',
+  'k': 'assets/chess_pieces/black_king.png',
+  'q': 'assets/chess_pieces/black_queen.png',
+  'r': 'assets/chess_pieces/black_rook.png',
+  'b': 'assets/chess_pieces/black_bishop.png',
+  'n': 'assets/chess_pieces/black_knight.png',
+  'p': 'assets/chess_pieces/black_pawn.png',
+};
+
+// Unicode symbol for each piece type (lowercase = piece type key)
+const Map<String, String> _pieceSymbol = {
+  'k': '♚',
+  'q': '♛',
+  'r': '♜',
+  'b': '♝',
+  'n': '♞',
+  'p': '♟',
+};
+
 class ChessBoard extends StatelessWidget {
   final String fen;
   final Set<String> selectedSquares;
   final Set<String> validMoveSquares;
   final void Function(String square) onSquareTap;
-  final bool flipped; // true = board from black's perspective
+  final bool flipped;
 
   const ChessBoard({
     super.key,
@@ -20,259 +47,280 @@ class ChessBoard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final board = _parseFen(fen);
+
     return AspectRatio(
       aspectRatio: 1,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final squareSize = constraints.maxWidth / 8;
-          return RepaintBoundary(
-            child: CustomPaint(
-              painter: _BoardPainter(
-                fen: fen,
-                selectedSquares: selectedSquares,
-                validMoveSquares: validMoveSquares,
-                squareSize: squareSize,
-                flipped: flipped,
-              ),
-              child: Stack(
-                children: _buildInteractiveSquares(squareSize),
-              ),
+      child: Column(
+        children: List.generate(8, (rankIdx) {
+          return Expanded(
+            child: Row(
+              children: List.generate(8, (fileIdx) {
+                final displayRank = flipped ? rankIdx : 7 - rankIdx;
+                final displayFile = flipped ? 7 - fileIdx : fileIdx;
+                final squareName =
+                    '${kFiles[displayFile]}${kRanks[7 - displayRank]}';
+                final piece = board[squareName];
+
+                final isLight = (rankIdx + fileIdx) % 2 == 0;
+                final isSelected = selectedSquares.contains(squareName);
+                final isValidMove = validMoveSquares.contains(squareName);
+                final hasOccupant = piece != null;
+
+                // Show rank label on left edge, file label on bottom edge
+                final showRankLabel = fileIdx == 0;
+                final showFileLabel = rankIdx == 7;
+                final rankLabel = flipped ? '${rankIdx + 1}' : '${8 - rankIdx}';
+                final fileLabel =
+                    flipped ? kFiles[7 - fileIdx] : kFiles[fileIdx];
+
+                Color squareColor;
+                if (isSelected) {
+                  squareColor = kSelectedSquare;
+                } else {
+                  squareColor = isLight ? kLightSquare : kDarkSquare;
+                }
+
+                return Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onSquareTap(squareName),
+                    child: Container(
+                      color: squareColor,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          // ── Valid-move indicator ──────────────────────────
+                          if (isValidMove)
+                            Center(
+                              child: hasOccupant
+                                  ? _CaptureRing()
+                                  : _MoveDot(),
+                            ),
+
+                          // ── Piece ─────────────────────────────────────────
+                          if (piece != null)
+                            Center(
+                              child: RepaintBoundary(
+                                key: ValueKey('piece_$squareName'),
+                                child: _PieceWidget(piece: piece),
+                              ),
+                            ),
+
+                          // ── Coordinate labels ─────────────────────────────
+                          if (showRankLabel)
+                            Positioned(
+                              top: 1,
+                              left: 2,
+                              child: Text(
+                                rankLabel,
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: isLight
+                                      ? kDarkSquare
+                                      : kLightSquare,
+                                ),
+                              ),
+                            ),
+                          if (showFileLabel)
+                            Positioned(
+                              bottom: 1,
+                              right: 2,
+                              child: Text(
+                                fileLabel,
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: isLight
+                                      ? kDarkSquare
+                                      : kLightSquare,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
             ),
           );
-        },
+        }),
       ),
     );
   }
-
-  List<Widget> _buildInteractiveSquares(double size) {
-    final widgets = <Widget>[];
-    for (int rank = 0; rank < 8; rank++) {
-      for (int file = 0; file < 8; file++) {
-        final displayRank = flipped ? rank : 7 - rank;
-        final displayFile = flipped ? 7 - file : file;
-        final squareName =
-            '${kFiles[displayFile]}${kRanks[7 - displayRank]}';
-        widgets.add(Positioned(
-          left: file * size,
-          top: rank * size,
-          child: GestureDetector(
-            onTap: () => onSquareTap(squareName),
-            child: SizedBox(width: size, height: size),
-          ),
-        ));
-      }
-    }
-    return widgets;
-  }
-}
-
-class _BoardPainter extends CustomPainter {
-  final String fen;
-  final Set<String> selectedSquares;
-  final Set<String> validMoveSquares;
-  final double squareSize;
-  final bool flipped;
-
-  final Map<String, ch.Piece?> _board;
-
-  _BoardPainter({
-    required this.fen,
-    required this.selectedSquares,
-    required this.validMoveSquares,
-    required this.squareSize,
-    required this.flipped,
-  }) : _board = _parseFen(fen);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    _drawSquares(canvas);
-    _drawCoordinates(canvas, size);
-    _drawPieces(canvas);
-  }
-
-  void _drawSquares(Canvas canvas) {
-    for (int rank = 0; rank < 8; rank++) {
-      for (int file = 0; file < 8; file++) {
-        final displayRank = flipped ? rank : 7 - rank;
-        final displayFile = flipped ? 7 - file : file;
-        final squareName =
-            '${kFiles[displayFile]}${kRanks[7 - displayRank]}';
-
-        final rect = Rect.fromLTWH(
-          file * squareSize,
-          rank * squareSize,
-          squareSize,
-          squareSize,
-        );
-
-        // Base color
-        Color color = (rank + file) % 2 == 0 ? kLightSquare : kDarkSquare;
-
-        // Highlight selected
-        if (selectedSquares.contains(squareName)) {
-          color = kSelectedSquare;
-        }
-
-        canvas.drawRect(rect, Paint()..color = color);
-
-        // Valid move overlay
-        if (validMoveSquares.contains(squareName)) {
-          final hasOccupant = _board[squareName] != null;
-          if (hasOccupant) {
-            // Ring for captures
-            final borderPaint = Paint()
-              ..color = kValidMove
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = squareSize * 0.1;
-            canvas.drawCircle(rect.center, squareSize * 0.45, borderPaint);
-          } else {
-            // Dot for empty squares
-            canvas.drawCircle(
-              rect.center,
-              squareSize * kValidMoveDotFraction,
-              Paint()..color = kValidMove,
-            );
-          }
-        }
-      }
-    }
-  }
-
-  void _drawCoordinates(Canvas canvas, Size size) {
-    const textStyle = TextStyle(
-      color: Colors.black54,
-      fontSize: 10,
-      fontWeight: FontWeight.bold,
-    );
-
-    // Rank numbers (left side)
-    for (int i = 0; i < 8; i++) {
-      final rankLabel = flipped ? '${i + 1}' : '${8 - i}';
-      final tp = TextPainter(
-        text: TextSpan(text: rankLabel, style: textStyle),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(2, i * squareSize + 2));
-    }
-
-    // File letters (bottom)
-    for (int i = 0; i < 8; i++) {
-      final fileLabel = flipped ? kFiles[7 - i] : kFiles[i];
-      final tp = TextPainter(
-        text: TextSpan(text: fileLabel, style: textStyle),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(
-          canvas,
-          Offset(i * squareSize + squareSize - tp.width - 2,
-              size.height - tp.height - 2));
-    }
-  }
-
-  void _drawPieces(Canvas canvas) {
-    for (int rank = 0; rank < 8; rank++) {
-      for (int file = 0; file < 8; file++) {
-        final displayRank = flipped ? rank : 7 - rank;
-        final displayFile = flipped ? 7 - file : file;
-        final squareName =
-            '${kFiles[displayFile]}${kRanks[7 - displayRank]}';
-        final piece = _board[squareName];
-        if (piece == null) continue;
-
-        final rect = Rect.fromLTWH(
-          file * squareSize + squareSize * 0.05,
-          rank * squareSize + squareSize * 0.05,
-          squareSize * 0.9,
-          squareSize * 0.9,
-        );
-
-        _drawPiece(canvas, rect, piece);
-      }
-    }
-  }
-
-  void _drawPiece(Canvas canvas, Rect rect, ch.Piece piece) {
-    final isWhite = piece.color == ch.Color.WHITE;
-    final pieceChar = piece.type.toLowerCase();
-
-    // Outer circle (piece body)
-    final bodyColor = isWhite ? Colors.white : const Color(0xFF2C2C2C);
-    final borderColor = isWhite ? const Color(0xFF888888) : Colors.white38;
-
-    canvas.drawCircle(
-      rect.center,
-      rect.width * 0.42,
-      Paint()..color = bodyColor,
-    );
-    canvas.drawCircle(
-      rect.center,
-      rect.width * 0.42,
-      Paint()
-        ..color = borderColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
-    );
-
-    // Piece letter
-    final textColor = isWhite ? Colors.black87 : Colors.white;
-    final label = _pieceLabel(pieceChar);
-    final tp = TextPainter(
-      text: TextSpan(
-        text: label,
-        style: TextStyle(
-          color: textColor,
-          fontSize: rect.width * 0.45,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'monospace',
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    tp.paint(
-        canvas,
-        Offset(
-          rect.center.dx - tp.width / 2,
-          rect.center.dy - tp.height / 2,
-        ));
-  }
-
-  String _pieceLabel(String type) {
-    switch (type) {
-      case 'p':
-        return '♟';
-      case 'n':
-        return '♞';
-      case 'b':
-        return '♝';
-      case 'r':
-        return '♜';
-      case 'q':
-        return '♛';
-      case 'k':
-        return '♚';
-      default:
-        return type.toUpperCase();
-    }
-  }
-
-  @override
-  bool shouldRepaint(_BoardPainter old) =>
-      old.fen != fen ||
-      old.selectedSquares != selectedSquares ||
-      old.validMoveSquares != validMoveSquares;
 
   static Map<String, ch.Piece?> _parseFen(String fen) {
     final board = <String, ch.Piece?>{};
     try {
       final game = ch.Chess.fromFEN(fen);
-      const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
       for (int rank = 1; rank <= 8; rank++) {
-        for (final file in files) {
+        for (final file in kFiles) {
           final sq = '$file$rank';
           board[sq] = game.get(sq);
         }
       }
     } catch (_) {}
     return board;
+  }
+}
+
+// ── Piece widget ──────────────────────────────────────────────────────────────
+
+class _PieceWidget extends StatelessWidget {
+  final ch.Piece piece;
+  const _PieceWidget({required this.piece});
+
+  @override
+  Widget build(BuildContext context) {
+    final isWhite = piece.color == ch.Color.WHITE;
+    final typeKey = piece.type.toLowerCase(); // 'p','n','b','r','q','k'
+    // FEN letter: uppercase for white, lowercase for black
+    final fenLetter = isWhite ? typeKey.toUpperCase() : typeKey;
+    final assetPath = _pieceAsset[fenLetter];
+
+    return LayoutBuilder(builder: (context, constraints) {
+      final size = constraints.maxWidth * 0.82;
+
+      // Try PNG asset first; fall back to styled unicode symbol.
+      if (assetPath != null) {
+        return _PieceImage(path: assetPath, size: size);
+      }
+      return _PieceSymbol(
+          symbol: _pieceSymbol[typeKey] ?? '?',
+          isWhite: isWhite,
+          size: size);
+    });
+  }
+}
+
+/// Loads a PNG asset; if it fails, falls back to the symbol widget.
+class _PieceImage extends StatelessWidget {
+  final String path;
+  final double size;
+  const _PieceImage({required this.path, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      path,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stack) {
+        // PNG file missing — derive piece info from path and fall back.
+        final isWhite = path.contains('white_');
+        final symbol = _symbolFromPath(path);
+        return _PieceSymbol(symbol: symbol, isWhite: isWhite, size: size);
+      },
+    );
+  }
+
+  static String _symbolFromPath(String path) {
+    for (final entry in _pieceSymbol.entries) {
+      if (path.contains(entry.key == 'k'
+          ? 'king'
+          : entry.key == 'q'
+              ? 'queen'
+              : entry.key == 'r'
+                  ? 'rook'
+                  : entry.key == 'b'
+                      ? 'bishop'
+                      : entry.key == 'n'
+                          ? 'knight'
+                          : 'pawn')) {
+        return entry.value;
+      }
+    }
+    return '?';
+  }
+}
+
+/// Styled unicode chess symbol — used when no PNG is available.
+class _PieceSymbol extends StatelessWidget {
+  final String symbol;
+  final bool isWhite;
+  final double size;
+  const _PieceSymbol(
+      {required this.symbol, required this.isWhite, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isWhite ? const Color(0xFFF5F0E8) : const Color(0xFF1A1A2E),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(80),
+            blurRadius: 3,
+            offset: const Offset(1, 2),
+          ),
+        ],
+        border: Border.all(
+          color: isWhite ? const Color(0xFF8B7355) : const Color(0xFF6B7FD4),
+          width: 1.5,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          symbol,
+          style: TextStyle(
+            fontSize: size * 0.56,
+            color: isWhite ? const Color(0xFF2C2C2C) : const Color(0xFFE8E8F0),
+            height: 1.0,
+            shadows: isWhite
+                ? null
+                : [
+                    const Shadow(
+                        color: Colors.white24,
+                        blurRadius: 2,
+                        offset: Offset(0, 1))
+                  ],
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Move indicators ───────────────────────────────────────────────────────────
+
+class _MoveDot extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (ctx, c) {
+      final d = c.maxWidth * kValidMoveDotFraction * 2;
+      return Container(
+        width: d,
+        height: d,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: kValidMove,
+        ),
+      );
+    });
+  }
+}
+
+class _CaptureRing extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (ctx, c) {
+      final size = c.maxWidth * 0.9;
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: kValidMove, width: c.maxWidth * 0.1),
+          color: Colors.transparent,
+        ),
+      );
+    });
   }
 }
