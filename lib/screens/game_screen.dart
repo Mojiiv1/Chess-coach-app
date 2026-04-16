@@ -3,6 +3,7 @@ import '../models/move.dart';
 import '../services/ai_service.dart';
 import '../services/coach_service.dart';
 import '../services/game_service.dart';
+import '../services/stats_service.dart';
 import '../utils/constants.dart';
 import '../widgets/chess_board.dart';
 
@@ -20,6 +21,7 @@ class _GameScreenState extends State<GameScreen> {
   Set<String> _validMoves = {};
   String? _statusMessage;
   bool _aiThinking = false;
+  bool _gameOverShown = false;
   AIDifficulty _difficulty = AIDifficulty.easy;
   CoachFeedback? _lastFeedback;
 
@@ -105,6 +107,48 @@ class _GameScreenState extends State<GameScreen> {
     } else {
       _statusMessage = null;
     }
+
+    if (_game.isGameOver && !_gameOverShown) {
+      _gameOverShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showGameOverDialog());
+    }
+  }
+
+  void _showGameOverDialog() {
+    if (!mounted) return;
+
+    // Record result
+    if (_game.isCheckmate()) {
+      // turn == 'white' means white is in checkmate → player loses
+      if (_game.turn == 'white') {
+        StatsService.recordLoss();
+      } else {
+        StatsService.recordWin();
+      }
+    } else if (_game.isDraw()) {
+      StatsService.recordDraw();
+    }
+
+    final isPlayerWin = _game.isCheckmate() && _game.turn == 'black';
+    final isDraw = _game.isDraw();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _GameOverDialog(
+        message: _statusMessage ?? 'Game Over',
+        isPlayerWin: isPlayerWin,
+        isDraw: isDraw,
+        onPlayAgain: () {
+          Navigator.pop(context);
+          _reset();
+        },
+        onBackHome: () {
+          Navigator.pop(context); // close dialog
+          Navigator.pop(context); // return to home screen
+        },
+      ),
+    );
   }
 
   void _reset() {
@@ -114,6 +158,7 @@ class _GameScreenState extends State<GameScreen> {
       _validMoves = {};
       _statusMessage = null;
       _aiThinking = false;
+      _gameOverShown = false;
       _lastFeedback = null;
     });
   }
@@ -467,6 +512,93 @@ class _MoveChip extends StatelessWidget {
           color: isCapture ? Colors.redAccent[100] : Colors.white70,
           fontSize: 13,
           fontFamily: 'monospace',
+        ),
+      ),
+    );
+  }
+}
+
+class _GameOverDialog extends StatelessWidget {
+  final String message;
+  final bool isPlayerWin;
+  final bool isDraw;
+  final VoidCallback onPlayAgain;
+  final VoidCallback onBackHome;
+
+  const _GameOverDialog({
+    required this.message,
+    required this.isPlayerWin,
+    required this.isDraw,
+    required this.onPlayAgain,
+    required this.onBackHome,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final (emoji, headline, color) = isDraw
+        ? ('🤝', 'Draw!', Colors.white70)
+        : isPlayerWin
+            ? ('🏆', 'You Win!', const Color(0xFF66BB6A))
+            : ('💀', 'You Lose', const Color(0xFFEF5350));
+
+    return Dialog(
+      backgroundColor: kAppSurface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 52)),
+            const SizedBox(height: 10),
+            Text(
+              headline,
+              style: TextStyle(
+                color: color,
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white60, fontSize: 14),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton.icon(
+                onPressed: onPlayAgain,
+                icon: const Icon(Icons.replay),
+                label: const Text('Play Again',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kAppPrimary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: OutlinedButton.icon(
+                onPressed: onBackHome,
+                icon: const Icon(Icons.home_outlined),
+                label: const Text('Back Home'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white60,
+                  side: const BorderSide(color: Colors.white24),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

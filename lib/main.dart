@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
-import 'screens/game_screen.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'screens/home_screen.dart';
+import 'services/stats_service.dart';
 import 'utils/constants.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
+  await StatsService.init();
   runApp(const ChessCoachApp());
 }
 
@@ -27,10 +32,7 @@ class ChessCoachApp extends StatelessWidget {
         scaffoldBackgroundColor: kAppBackground,
         useMaterial3: true,
       ),
-      initialRoute: '/',
-      routes: {
-        '/': (_) => const GameScreen(),
-      },
+      home: const HomeScreen(),
     );
   }
 }
