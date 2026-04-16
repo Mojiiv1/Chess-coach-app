@@ -1,36 +1,26 @@
-import 'package:chess_vectors_flutter/chess_vectors_flutter.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../utils/constants.dart';
 
-// Ivory fill for white pieces — prevents them blending into the light squares.
-const Color _whiteFill = Color(0xFFFFFACD);
-const Color _whiteStroke = Color(0xFF2C2C2C);
+const Map<String, String> _pieceAsset = {
+  'K': 'assets/chess_pieces/white_king.svg',
+  'Q': 'assets/chess_pieces/white_queen.svg',
+  'R': 'assets/chess_pieces/white_rook.svg',
+  'B': 'assets/chess_pieces/white_bishop.svg',
+  'N': 'assets/chess_pieces/white_knight.svg',
+  'P': 'assets/chess_pieces/white_pawn.svg',
+  'k': 'assets/chess_pieces/black_king.svg',
+  'q': 'assets/chess_pieces/black_queen.svg',
+  'r': 'assets/chess_pieces/black_rook.svg',
+  'b': 'assets/chess_pieces/black_bishop.svg',
+  'n': 'assets/chess_pieces/black_knight.svg',
+  'p': 'assets/chess_pieces/black_pawn.svg',
+};
 
 Widget _pieceWidget(String piece, double size) {
-  final startTime = DateTime.now();
-  // ignore: avoid_print
-  print('🔵 Rendering piece: $piece (size: ${size.toStringAsFixed(1)})');
-
-  final widget = switch (piece) {
-    'P' => WhitePawn(size: size, fillColor: _whiteFill, strokeColor: _whiteStroke),
-    'N' => WhiteKnight(size: size, fillColor: _whiteFill, strokeColor: _whiteStroke),
-    'B' => WhiteBishop(size: size, fillColor: _whiteFill, strokeColor: _whiteStroke),
-    'R' => WhiteRook(size: size, fillColor: _whiteFill, strokeColor: _whiteStroke),
-    'Q' => WhiteQueen(size: size, fillColor: _whiteFill, strokeColor: _whiteStroke),
-    'K' => WhiteKing(size: size, fillColor: _whiteFill, strokeColor: _whiteStroke),
-    'p' => BlackPawn(size: size),
-    'n' => BlackKnight(size: size),
-    'b' => BlackBishop(size: size),
-    'r' => BlackRook(size: size),
-    'q' => BlackQueen(size: size),
-    'k' => BlackKing(size: size),
-    _   => const SizedBox.shrink(),
-  };
-
-  final elapsed = DateTime.now().difference(startTime);
-  // ignore: avoid_print
-  print('✅ Piece $piece rendered in ${elapsed.inMilliseconds}ms');
-  return widget;
+  final path = _pieceAsset[piece];
+  if (path == null) return const SizedBox.shrink();
+  return SvgPicture.asset(path, width: size, height: size, fit: BoxFit.contain);
 }
 
 /// A pure display widget. All selection/move state is managed by the parent.

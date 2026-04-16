@@ -21,7 +21,6 @@ dependencies:
   uuid: ^4.0.0
   logger: ^2.0.1
   flutter_svg: ^2.2.4
-  chess_vectors_flutter: ^1.1.0
 
 dev_dependencies:
   flutter_test:
@@ -36,3 +35,4 @@ flutter:
   assets:
     - assets/images/
     - assets/sounds/
+    - assets/chess_pieces/
