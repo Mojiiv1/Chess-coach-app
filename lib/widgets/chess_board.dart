@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../utils/constants.dart';
 
 /// A pure display widget. All selection/move state is managed by the parent.
@@ -127,13 +126,12 @@ class _ChessSquare extends StatelessWidget {
                     : _MoveDot(size: size),
               ),
 
-            // Piece glyph (SVG — renders identically on every square)
+            // Piece glyph (emoji — renders consistently on every update)
             if (piece != null)
               Center(
-                child: SvgPicture.string(
-                  kPieceSVG[piece] ?? '',
-                  width: size * 0.82,
-                  height: size * 0.82,
+                child: Text(
+                  kPieceEmoji[piece] ?? '',
+                  style: TextStyle(fontSize: size * 0.75),
                 ),
               ),
 
