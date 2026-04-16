@@ -2,22 +2,35 @@ import 'package:chess_vectors_flutter/chess_vectors_flutter.dart';
 import 'package:flutter/material.dart';
 import '../utils/constants.dart';
 
+// Ivory fill for white pieces — prevents them blending into the light squares.
+const Color _whiteFill = Color(0xFFFFFACD);
+const Color _whiteStroke = Color(0xFF2C2C2C);
+
 Widget _pieceWidget(String piece, double size) {
-  switch (piece) {
-    case 'P': return WhitePawn(size: size);
-    case 'N': return WhiteKnight(size: size);
-    case 'B': return WhiteBishop(size: size);
-    case 'R': return WhiteRook(size: size);
-    case 'Q': return WhiteQueen(size: size);
-    case 'K': return WhiteKing(size: size);
-    case 'p': return BlackPawn(size: size);
-    case 'n': return BlackKnight(size: size);
-    case 'b': return BlackBishop(size: size);
-    case 'r': return BlackRook(size: size);
-    case 'q': return BlackQueen(size: size);
-    case 'k': return BlackKing(size: size);
-    default:  return const SizedBox.shrink();
-  }
+  final startTime = DateTime.now();
+  // ignore: avoid_print
+  print('🔵 Rendering piece: $piece (size: ${size.toStringAsFixed(1)})');
+
+  final widget = switch (piece) {
+    'P' => WhitePawn(size: size, fillColor: _whiteFill, strokeColor: _whiteStroke),
+    'N' => WhiteKnight(size: size, fillColor: _whiteFill, strokeColor: _whiteStroke),
+    'B' => WhiteBishop(size: size, fillColor: _whiteFill, strokeColor: _whiteStroke),
+    'R' => WhiteRook(size: size, fillColor: _whiteFill, strokeColor: _whiteStroke),
+    'Q' => WhiteQueen(size: size, fillColor: _whiteFill, strokeColor: _whiteStroke),
+    'K' => WhiteKing(size: size, fillColor: _whiteFill, strokeColor: _whiteStroke),
+    'p' => BlackPawn(size: size),
+    'n' => BlackKnight(size: size),
+    'b' => BlackBishop(size: size),
+    'r' => BlackRook(size: size),
+    'q' => BlackQueen(size: size),
+    'k' => BlackKing(size: size),
+    _   => const SizedBox.shrink(),
+  };
+
+  final elapsed = DateTime.now().difference(startTime);
+  // ignore: avoid_print
+  print('✅ Piece $piece rendered in ${elapsed.inMilliseconds}ms');
+  return widget;
 }
 
 /// A pure display widget. All selection/move state is managed by the parent.
@@ -158,10 +171,15 @@ class _ChessSquare extends StatelessWidget {
                     : _MoveDot(size: size),
               ),
 
-            // Piece glyph (vector — professional SVG rendering)
+            // Piece glyph — RepaintBoundary isolates repaints to this subtree.
+            // ValueKey(piece) forces a full remount when piece type changes,
+            // working around VectorImagePainter.shouldRepaint always returning false.
             if (piece != null)
               Center(
-                child: _pieceWidget(piece!, size * 0.82),
+                child: RepaintBoundary(
+                  key: ValueKey('piece_$piece'),
+                  child: _pieceWidget(piece!, size * 0.82),
+                ),
               ),
 
             // Rank number (top-left of leftmost column)
