@@ -1,5 +1,24 @@
+import 'package:chess_vectors_flutter/chess_vectors_flutter.dart';
 import 'package:flutter/material.dart';
 import '../utils/constants.dart';
+
+Widget _pieceWidget(String piece, double size) {
+  switch (piece) {
+    case 'P': return WhitePawn(size: size);
+    case 'N': return WhiteKnight(size: size);
+    case 'B': return WhiteBishop(size: size);
+    case 'R': return WhiteRook(size: size);
+    case 'Q': return WhiteQueen(size: size);
+    case 'K': return WhiteKing(size: size);
+    case 'p': return BlackPawn(size: size);
+    case 'n': return BlackKnight(size: size);
+    case 'b': return BlackBishop(size: size);
+    case 'r': return BlackRook(size: size);
+    case 'q': return BlackQueen(size: size);
+    case 'k': return BlackKing(size: size);
+    default:  return const SizedBox.shrink();
+  }
+}
 
 /// A pure display widget. All selection/move state is managed by the parent.
 class ChessBoard extends StatelessWidget {
@@ -68,11 +87,6 @@ class ChessBoard extends StatelessWidget {
                         final square = '${kFiles[fileIdx]}$rank';
                         final isLight = (fileIdx + rank) % 2 == 0;
                         final piece = boardState[square];
-
-                        if (rank == 8 && piece != null) {
-                          // ignore: avoid_print
-                          print('🔍 Rank 8 [$square]: piece=$piece → emoji=${kPieceEmoji[piece]}');
-                        }
 
                         return _ChessSquare(
                           key: ValueKey(square),
@@ -144,13 +158,10 @@ class _ChessSquare extends StatelessWidget {
                     : _MoveDot(size: size),
               ),
 
-            // Piece glyph (emoji — renders consistently on every update)
+            // Piece glyph (vector — professional SVG rendering)
             if (piece != null)
               Center(
-                child: Text(
-                  kPieceEmoji[piece] ?? '',
-                  style: TextStyle(fontSize: size * 0.75),
-                ),
+                child: _pieceWidget(piece!, size * 0.82),
               ),
 
             // Rank number (top-left of leftmost column)

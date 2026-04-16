@@ -13,21 +13,6 @@ const Color kAppBackground = Color(0xFF1E1E2E);
 const Color kAppSurface = Color(0xFF2A2A3E);
 const Color kAppPrimary = Color(0xFF7C8BED);
 
-/// Emoji chess pieces — keys match FEN piece letters (uppercase=white).
-const Map<String, String> kPieceEmoji = {
-  'P': '♙',
-  'N': '♘',
-  'B': '♗',
-  'R': '♖',
-  'Q': '♕',
-  'K': '♔',
-  'p': '♟',
-  'n': '♞',
-  'b': '♝',
-  'r': '♜',
-  'q': '♛',
-  'k': '♚',
-};
 
 // Starting FEN
 const String kStartingFen =
