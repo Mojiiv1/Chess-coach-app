@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../services/stats_service.dart';
 import '../services/save_game_service.dart';
 import '../models/game_stats.dart';
@@ -19,23 +20,24 @@ class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late GameStats _stats;
   bool _hasSavedGames = false;
-  late AnimationController _animCtrl;
-  late Animation<double> _fadeIn;
+  late AnimationController _glowCtrl;
+  late Animation<double> _glowAnim;
 
   @override
   void initState() {
     super.initState();
     _stats = StatsService.getStats();
     _hasSavedGames = SaveGameService.hasSavedGames;
-    _animCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 900));
-    _fadeIn = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
-    _animCtrl.forward();
+    _glowCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat(reverse: true);
+    _glowAnim = CurvedAnimation(parent: _glowCtrl, curve: Curves.easeInOut);
   }
 
   @override
   void dispose() {
-    _animCtrl.dispose();
+    _glowCtrl.dispose();
     super.dispose();
   }
 
@@ -45,6 +47,8 @@ class _HomeScreenState extends State<HomeScreen>
       _hasSavedGames = SaveGameService.hasSavedGames;
     });
   }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -58,47 +62,22 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
         child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeIn,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 32),
-                  _buildStatsCard(),
-                  const SizedBox(height: 32),
-                  _buildGameModeButtons(context),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildSecondaryButton(
-                          label: 'Statistics',
-                          icon: Icons.bar_chart_rounded,
-                          onTap: () async {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const StatsScreen()),
-                            );
-                            _refreshStats();
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildSecondaryButton(
-                          label: 'Settings',
-                          icon: Icons.settings_rounded,
-                          onTap: null,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _buildLogoSection(),
+                const SizedBox(height: 32),
+                _buildStatsCard()
+                    .animate()
+                    .fadeIn(delay: 200.ms, duration: 500.ms)
+                    .slideY(begin: 0.08, curve: Curves.easeOut),
+                const SizedBox(height: 28),
+                _buildGameModeButtons(context),
+                const SizedBox(height: 24),
+                _buildFooterButtons(),
+              ],
             ),
           ),
         ),
@@ -106,103 +85,109 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildHeader() {
+  // ── Logo ───────────────────────────────────────────────────────────────────
+
+  Widget _buildLogoSection() {
     return Column(
       children: [
-        Container(
-          width: 90,
-          height: 90,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            gradient: const LinearGradient(
-              colors: [kPrimaryAccent, kSecondaryAccent],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: kPrimaryAccent.withAlpha(120),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
+        AnimatedBuilder(
+          animation: _glowAnim,
+          builder: (_, child) => Container(
+            width: 110,
+            height: 110,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [kPrimaryAccent, kSecondaryAccent],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-            ],
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: kPrimaryAccent
+                      .withAlpha((80 + (_glowAnim.value * 100)).round()),
+                  blurRadius: 20 + (_glowAnim.value * 20),
+                  spreadRadius: 2 + (_glowAnim.value * 4),
+                ),
+              ],
+            ),
+            child: child,
           ),
-          child: const Icon(Icons.castle_rounded,
-              size: 52, color: Colors.white),
-        ),
-        const SizedBox(height: 18),
+          child: const Icon(Icons.castle_rounded, size: 56, color: Colors.white),
+        )
+            .animate()
+            .fadeIn(duration: 600.ms)
+            .scale(begin: const Offset(0.7, 0.7), curve: Curves.elasticOut),
+        const SizedBox(height: 20),
         const Text(
           'Chess Coach AI',
           style: TextStyle(
-            fontSize: 32,
+            fontSize: 34,
             fontWeight: FontWeight.w800,
             color: Colors.white,
             letterSpacing: 0.5,
           ),
-        ),
+        ).animate().fadeIn(delay: 150.ms, duration: 500.ms),
         const SizedBox(height: 6),
         Text(
           'Play. Learn. Improve.',
           style: TextStyle(
             fontSize: 15,
-            color: Colors.white.withAlpha(160),
-            letterSpacing: 1.2,
+            color: Colors.white.withAlpha(155),
+            letterSpacing: 1.4,
           ),
-        ),
+        ).animate().fadeIn(delay: 250.ms, duration: 500.ms),
       ],
     );
   }
 
+  // ── Stats card ─────────────────────────────────────────────────────────────
+
   Widget _buildStatsCard() {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(22),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 24),
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
           decoration: BoxDecoration(
             color: Colors.white.withAlpha(18),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(color: Colors.white.withAlpha(40), width: 1),
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Your Stats',
+                  Text(
+                    'YOUR STATS',
                     style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600),
+                      color: Colors.white.withAlpha(140),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.6,
+                    ),
                   ),
                   if (_stats.lastResult != null)
                     _ResultBadge(result: _stats.lastResult!),
                 ],
               ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _StatPill(
-                      label: 'Wins',
-                      value: '${_stats.wins}',
-                      color: kGoodMove),
-                  _StatPill(
-                      label: 'Losses',
-                      value: '${_stats.losses}',
-                      color: kBadMove),
-                  _StatPill(
-                      label: 'Draws',
-                      value: '${_stats.draws}',
-                      color: Colors.white54),
-                  _StatPill(
-                      label: 'Win %',
-                      value: '${_stats.winRatePercentage}%',
-                      color: kPrimaryAccent),
-                ],
+              const SizedBox(height: 18),
+              IntrinsicHeight(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _StatItem('Wins', '${_stats.wins}', kGoodMove),
+                    _StatDivider(),
+                    _StatItem('Losses', '${_stats.losses}', kBadMove),
+                    _StatDivider(),
+                    _StatItem('Draws', '${_stats.draws}', Colors.white54),
+                    _StatDivider(),
+                    _StatItem(
+                        'Win %', '${_stats.winRatePercentage}%', kPrimaryAccent),
+                  ],
+                ),
               ),
             ],
           ),
@@ -211,104 +196,155 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  // ── Game mode buttons ──────────────────────────────────────────────────────
+
   Widget _buildGameModeButtons(BuildContext context) {
+    final buttons = [
+      _GameModeButtonData(
+        icon: Icons.smart_toy_rounded,
+        title: 'Play vs AI',
+        subtitle: 'Challenge the computer',
+        gradientColors: const [Color(0xFF4158D0), Color(0xFF2196F3)],
+        shadowColor: const Color(0xFF4158D0),
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const GameModeSelectionScreen(
+                gameMode: GameMode.playerVsAI,
+              ),
+            ),
+          );
+          _refreshStats();
+        },
+      ),
+      _GameModeButtonData(
+        icon: Icons.people_rounded,
+        title: 'Local Multiplayer',
+        subtitle: 'Player 1 vs Player 2',
+        gradientColors: const [Color(0xFF00BCD4), Color(0xFF0097A7)],
+        shadowColor: kSecondaryAccent,
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const GameModeSelectionScreen(
+                gameMode: GameMode.localMultiplayer,
+              ),
+            ),
+          );
+          _refreshStats();
+        },
+      ),
+      if (_hasSavedGames)
+        _GameModeButtonData(
+          icon: Icons.folder_open_rounded,
+          title: 'Continue Game',
+          subtitle: 'Resume a saved game',
+          gradientColors: const [Color(0xFF2E7D32), Color(0xFF388E3C)],
+          shadowColor: kGoodMove,
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SavedGamesScreen()),
+            );
+            _refreshStats();
+          },
+        ),
+    ];
+
     return Column(
       children: [
-        _GameModeButton(
-          icon: Icons.play_arrow_rounded,
-          title: 'Play vs AI',
-          subtitle: 'Challenge the computer',
-          gradientColors: const [Color(0xFF4158D0), Color(0xFF2196F3)],
-          shadowColor: const Color(0xFF4158D0),
-          onTap: () async {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const GameModeSelectionScreen(
-                  gameMode: GameMode.playerVsAI,
-                ),
-              ),
-            );
-            _refreshStats();
-          },
-        ),
-        const SizedBox(height: 12),
-        _GameModeButton(
-          icon: Icons.people_rounded,
-          title: 'Local Multiplayer',
-          subtitle: 'Player 1 vs Player 2',
-          gradientColors: const [Color(0xFF00BCD4), Color(0xFF0097A7)],
-          shadowColor: kSecondaryAccent,
-          onTap: () async {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const GameModeSelectionScreen(
-                  gameMode: GameMode.localMultiplayer,
-                ),
-              ),
-            );
-            _refreshStats();
-          },
-        ),
-        if (_hasSavedGames) ...[
-          const SizedBox(height: 12),
-          _GameModeButton(
-            icon: Icons.folder_open_rounded,
-            title: 'Continue Game',
-            subtitle: 'Resume a saved game',
-            gradientColors: const [Color(0xFF2E7D32), Color(0xFF388E3C)],
-            shadowColor: kGoodMove,
-            onTap: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const SavedGamesScreen()),
-              );
-              _refreshStats();
-            },
-          ),
+        for (int i = 0; i < buttons.length; i++) ...[
+          if (i > 0) const SizedBox(height: 14),
+          _GameModeButton(data: buttons[i])
+              .animate()
+              .fadeIn(delay: (300 + i * 80).ms, duration: 400.ms)
+              .slideX(begin: 0.08, curve: Curves.easeOut),
         ],
       ],
     );
   }
 
-  Widget _buildSecondaryButton({
-    required String label,
-    required IconData icon,
-    required VoidCallback? onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Opacity(
-        opacity: onTap == null ? 0.4 : 1.0,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white.withAlpha(14),
-                borderRadius: BorderRadius.circular(14),
-                border:
-                    Border.all(color: Colors.white.withAlpha(30), width: 1),
+  // ── Footer buttons ─────────────────────────────────────────────────────────
+
+  Widget _buildFooterButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: _FooterButton(
+            icon: Icons.bar_chart_rounded,
+            label: 'Statistics',
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const StatsScreen()),
+              );
+              _refreshStats();
+            },
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: _FooterButton(
+            icon: Icons.settings_rounded,
+            label: 'Settings',
+            onTap: _showSettingsDialog,
+          ),
+        ),
+      ],
+    )
+        .animate()
+        .fadeIn(delay: 500.ms, duration: 400.ms)
+        .slideY(begin: 0.08, curve: Curves.easeOut);
+  }
+
+  // ── Settings dialog ────────────────────────────────────────────────────────
+
+  void _showSettingsDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF1A1F2E),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Settings',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, color: Colors.white70, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500),
+              const SizedBox(height: 24),
+              _SettingItem(label: 'Sound Effects', initialValue: true),
+              const SizedBox(height: 4),
+              _SettingItem(label: 'Move Hints', initialValue: true),
+              const SizedBox(height: 4),
+              _SettingItem(label: 'Coach Feedback', initialValue: true),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kPrimaryAccent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
-                ],
+                  child: const Text('Done',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -318,7 +354,7 @@ class _HomeScreenState extends State<HomeScreen>
 
 // ── Game Mode Button ──────────────────────────────────────────────────────────
 
-class _GameModeButton extends StatelessWidget {
+class _GameModeButtonData {
   final IconData icon;
   final String title;
   final String subtitle;
@@ -326,7 +362,7 @@ class _GameModeButton extends StatelessWidget {
   final Color shadowColor;
   final VoidCallback onTap;
 
-  const _GameModeButton({
+  const _GameModeButtonData({
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -334,39 +370,44 @@ class _GameModeButton extends StatelessWidget {
     required this.shadowColor,
     required this.onTap,
   });
+}
+
+class _GameModeButton extends StatelessWidget {
+  final _GameModeButtonData data;
+  const _GameModeButton({required this.data});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: data.onTap,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: gradientColors,
+            colors: data.gradientColors,
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
           ),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: shadowColor.withAlpha(90),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
+              color: data.shadowColor.withAlpha(100),
+              blurRadius: 18,
+              offset: const Offset(0, 7),
             ),
           ],
         ),
         child: Row(
           children: [
             Container(
-              width: 48,
-              height: 48,
+              width: 50,
+              height: 50,
               decoration: BoxDecoration(
                 color: Colors.white.withAlpha(35),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, color: Colors.white, size: 26),
+              child: Icon(data.icon, color: Colors.white, size: 26),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -374,16 +415,16 @@ class _GameModeButton extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title,
+                    data.title,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 3),
                   Text(
-                    subtitle,
+                    data.subtitle,
                     style: TextStyle(
                       color: Colors.white.withAlpha(190),
                       fontSize: 13,
@@ -393,7 +434,7 @@ class _GameModeButton extends StatelessWidget {
               ),
             ),
             Icon(Icons.arrow_forward_ios_rounded,
-                color: Colors.white.withAlpha(180), size: 16),
+                color: Colors.white.withAlpha(180), size: 15),
           ],
         ),
       ),
@@ -401,27 +442,132 @@ class _GameModeButton extends StatelessWidget {
   }
 }
 
-// ── Stat Pill ─────────────────────────────────────────────────────────────────
+// ── Footer Button ─────────────────────────────────────────────────────────────
 
-class _StatPill extends StatelessWidget {
+class _FooterButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _FooterButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(14),
+                borderRadius: BorderRadius.circular(14),
+                border:
+                    Border.all(color: Colors.white.withAlpha(30), width: 1),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, color: Colors.white70, size: 22),
+                  const SizedBox(height: 6),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Setting Item ──────────────────────────────────────────────────────────────
+
+class _SettingItem extends StatefulWidget {
+  final String label;
+  final bool initialValue;
+  const _SettingItem({required this.label, required this.initialValue});
+
+  @override
+  State<_SettingItem> createState() => _SettingItemState();
+}
+
+class _SettingItemState extends State<_SettingItem> {
+  late bool _value;
+
+  @override
+  void initState() {
+    super.initState();
+    _value = widget.initialValue;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(widget.label,
+            style: const TextStyle(color: Colors.white70, fontSize: 15)),
+        Switch(
+          value: _value,
+          onChanged: (val) => setState(() => _value = val),
+          activeThumbColor: kPrimaryAccent,
+          activeTrackColor: kPrimaryAccent.withAlpha(120),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Stat Item ─────────────────────────────────────────────────────────────────
+
+class _StatItem extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
 
-  const _StatPill(
-      {required this.label, required this.value, required this.color});
+  const _StatItem(this.label, this.value, this.color);
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(value,
             style: TextStyle(
                 color: color, fontSize: 22, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
         Text(label,
-            style: const TextStyle(color: Colors.white54, fontSize: 12)),
+            style: TextStyle(
+                color: Colors.white.withAlpha(130), fontSize: 11)),
       ],
+    );
+  }
+}
+
+class _StatDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 44,
+      color: Colors.white.withAlpha(30),
     );
   }
 }
