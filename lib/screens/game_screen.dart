@@ -594,49 +594,166 @@ class _EvalBar extends StatelessWidget {
 
 class _CoachPanel extends StatelessWidget {
   final CoachFeedback feedback;
-
   const _CoachPanel({required this.feedback});
 
-  Color get _bgColor {
-    switch (feedback.quality) {
-      case MoveQuality.brilliant:
-      case MoveQuality.excellent:
-        return const Color(0xFF1B5E20);
-      case MoveQuality.good:
-        return const Color(0xFF1A237E);
-      case MoveQuality.inaccuracy:
-        return const Color(0xFF4A3800);
-      case MoveQuality.mistake:
-        return const Color(0xFF6D1F00);
-      case MoveQuality.blunder:
-        return const Color(0xFF7F0000);
-    }
-  }
+  static const _qualityMeta = {
+    MoveQuality.brilliant: (
+      bg: Color(0xFF0D3320),
+      border: Color(0xFF2E7D32),
+      icon: Icons.auto_awesome_rounded,
+      iconColor: Color(0xFFFFD700),
+    ),
+    MoveQuality.excellent: (
+      bg: Color(0xFF0D3320),
+      border: Color(0xFF2E7D32),
+      icon: Icons.star_rounded,
+      iconColor: Color(0xFF69F0AE),
+    ),
+    MoveQuality.good: (
+      bg: Color(0xFF0D1F3C),
+      border: Color(0xFF1565C0),
+      icon: Icons.thumb_up_rounded,
+      iconColor: Color(0xFF42A5F5),
+    ),
+    MoveQuality.inaccuracy: (
+      bg: Color(0xFF2A1E00),
+      border: Color(0xFFF57F17),
+      icon: Icons.info_rounded,
+      iconColor: Color(0xFFFFB74D),
+    ),
+    MoveQuality.mistake: (
+      bg: Color(0xFF2A0A00),
+      border: Color(0xFFB71C1C),
+      icon: Icons.warning_rounded,
+      iconColor: Color(0xFFEF5350),
+    ),
+    MoveQuality.blunder: (
+      bg: Color(0xFF2A0000),
+      border: Color(0xFFD50000),
+      icon: Icons.dangerous_rounded,
+      iconColor: Color(0xFFFF5252),
+    ),
+  };
 
   @override
   Widget build(BuildContext context) {
+    final meta = _qualityMeta[feedback.quality]!;
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      color: _bgColor,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
+      margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: meta.bg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: meta.border, width: 1),
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(feedback.qualityLabel,
-              style: const TextStyle(
-                  color: Colors.white,
+          // ── Header row ────────────────────────────────────────────────
+          Row(
+            children: [
+              Icon(meta.icon, color: meta.iconColor, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                feedback.qualityLabel,
+                style: TextStyle(
+                  color: meta.iconColor,
+                  fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  fontSize: 13)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              feedback.message,
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
-              maxLines: 3,
+                ),
+              ),
+              if (feedback.tactics.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Wrap(
+                    spacing: 4,
+                    runSpacing: 2,
+                    children: feedback.tactics
+                        .map((t) => _TacticChip(label: t, color: meta.iconColor))
+                        .toList(),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          // ── Main message ──────────────────────────────────────────────
+          Text(
+            feedback.message,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              height: 1.4,
+            ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+
+          // ── Suggestion ────────────────────────────────────────────────
+          if (feedback.suggestion != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.lightbulb_outline_rounded,
+                    size: 13, color: Color(0xFFFFD700)),
+                const SizedBox(width: 5),
+                Text(
+                  'Try instead: ${feedback.suggestion}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFFFFD700),
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          // ── Tip ───────────────────────────────────────────────────────
+          if (feedback.tip.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              feedback.tip,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.white.withAlpha(160),
+                fontStyle: FontStyle.italic,
+              ),
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-          ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _TacticChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _TacticChip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withAlpha(40),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withAlpha(120), width: 0.5),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

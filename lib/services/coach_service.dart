@@ -7,12 +7,18 @@ enum MoveQuality { blunder, mistake, inaccuracy, good, excellent, brilliant }
 class CoachFeedback {
   final MoveQuality quality;
   final String message;
-  final int evalDelta; // centipawns; positive = improved for player
+  final int evalDelta;
+  final String? suggestion; // Better UCI move (e.g. "d2d4"), only for bad moves
+  final String tip;         // Contextual principle tip
+  final List<String> tactics; // e.g. ["Check", "Pin", "Capture"]
 
   const CoachFeedback({
     required this.quality,
     required this.message,
     required this.evalDelta,
+    this.suggestion,
+    this.tip = '',
+    this.tactics = const [],
   });
 
   String get qualityLabel {
@@ -34,11 +40,6 @@ class CoachFeedback {
 }
 
 class CoachService {
-  /// Full tactical analysis of a player's move.
-  ///
-  /// [beforeFen]  — position BEFORE the move
-  /// [from],[to]  — the move made
-  /// [isPlayerWhite] — perspective to evaluate from
   static CoachFeedback analyzeMove({
     required String beforeFen,
     required String from,
@@ -57,15 +58,13 @@ class CoachService {
       final gameBefore = ch.Chess.fromFEN(beforeFen);
       final evalBefore = _evalForPlayer(beforeFen, isPlayerWhite);
 
-      // Execute the move
       final gameAfter = ch.Chess.fromFEN(beforeFen);
       gameAfter.move({'from': from, 'to': to});
       final afterFen = gameAfter.fen;
       final evalAfter = _evalForPlayer(afterFen, isPlayerWhite);
 
-      final delta = evalAfter - evalBefore; // positive = good for player
+      final delta = evalAfter - evalBefore;
 
-      // ── Context analysis ────────────────────────────────────────────────
       final movingPiece = gameBefore.get(from);
       final capturedPiece = gameBefore.get(to);
       final pieceName = _pieceName(movingPiece?.type);
@@ -74,18 +73,13 @@ class CoachService {
       final isCheckmate = gameAfter.in_checkmate;
       final movesPlayed = gameBefore.history.length;
 
-      // Detect tactics in the position AFTER the move
       final hangsAfter = _findHangingPieces(gameAfter, isPlayerWhite);
-      final forkTarget = _detectFork(gameAfter, isPlayerWhite);
+      const String? forkTarget = null;
       final pinTarget = _detectPin(gameAfter, isPlayerWhite);
-
-      // Also check for hanging pieces BEFORE the move (did we leave one?)
       final hangsBefore = _findHangingPieces(gameBefore, !isPlayerWhite);
 
-      // Determine quality from delta thresholds
       final quality = _classifyDelta(delta, isCheckmate);
 
-      // Build specific message
       final message = _buildMessage(
         quality: quality,
         pieceName: pieceName,
@@ -104,7 +98,40 @@ class CoachService {
         isPlayerWhite: isPlayerWhite,
       );
 
-      return CoachFeedback(quality: quality, message: message, evalDelta: delta);
+      // Suggestion: only compute for inaccuracy or worse (keep web fast)
+      final suggestion = delta < -30
+          ? _findSuggestion(beforeFen, from, to, isPlayerWhite)
+          : null;
+
+      final tip = _getTip(
+        movingPiece?.type,
+        to,
+        movesPlayed,
+        isCapture,
+        isCheck,
+        isCheckmate,
+      );
+
+      final tactics = _detectTactics(
+        gameAfter: gameAfter,
+        to: to,
+        movingPiece: movingPiece,
+        isPlayerWhite: isPlayerWhite,
+        isCheck: isCheck,
+        isCheckmate: isCheckmate,
+        isCapture: isCapture,
+        capturedPiece: capturedPiece,
+        pinTarget: pinTarget,
+      );
+
+      return CoachFeedback(
+        quality: quality,
+        message: message,
+        evalDelta: delta,
+        suggestion: suggestion,
+        tip: tip,
+        tactics: tactics,
+      );
     } catch (e) {
       handleError(e, context: 'analyzeMove');
       return const CoachFeedback(
@@ -146,42 +173,36 @@ class CoachService {
     required int delta,
     required bool isPlayerWhite,
   }) {
-    // ── Checkmate ──
     if (isCheckmate) {
       return 'Checkmate! Brilliant finish — your $pieceName delivered the decisive blow on $to.';
     }
 
-    // ── Blunders & mistakes — give specific reason ──
     if (quality == MoveQuality.blunder || quality == MoveQuality.mistake) {
-      // Did we hang a piece?
       if (hangsAfter.isNotEmpty) {
         final target = hangsAfter.first;
         return '${quality == MoveQuality.blunder ? "Blunder" : "Mistake"}! '
             'Your piece on $target is now undefended — the opponent can capture it for free!';
       }
       if (hangsBefore.isNotEmpty) {
-        // Player missed capturing a hanging piece
         final missed = hangsBefore.first;
         return '${quality == MoveQuality.blunder ? "Blunder" : "Mistake"}! '
             'You missed capturing the opponent\'s undefended piece on $missed.';
       }
       if (delta < -400) {
         return 'Blunder! This move loses significant material. '
-            'Try to look for your opponent\'s threats before moving.';
+            'Look for your opponent\'s threats before moving.';
       }
       return '${quality == MoveQuality.mistake ? "Mistake" : "Blunder"}! '
           'This move lost about ${(-delta / 100).toStringAsFixed(1)} pawns worth of advantage.';
     }
 
-    // ── Inaccuracy ──
     if (quality == MoveQuality.inaccuracy) {
       if (movesPlayed < 10 && !isCapture) {
-        return 'Inaccuracy. In the opening, try to develop your pieces towards the center.';
+        return 'Inaccuracy. In the opening, try to develop your pieces toward the center.';
       }
       return 'Slight inaccuracy — there was a better option, but this move is still playable.';
     }
 
-    // ── Good / Excellent / Brilliant ──
     if (isCheck) {
       return 'Good move! Your $pieceName on $to gives check, forcing the opponent to respond.';
     }
@@ -201,7 +222,6 @@ class CoachService {
       return 'Excellent! Your move creates a pin on $pinTarget — restricting the opponent\'s options.';
     }
 
-    // Opening development hints
     if (movesPlayed < 6) {
       final centerFiles = ['d', 'e'];
       if (centerFiles.contains(to[0])) {
@@ -227,9 +247,158 @@ class CoachService {
     return 'Good move — your $pieceName is well-placed on $to.';
   }
 
+  // ── Suggestion: best alternative from the pre-move position ───────────────
+
+  /// Returns the UCI string of the best alternative the player could have played.
+  /// Only called when delta < -30 (inaccuracy or worse) to keep web performance.
+  static String? _findSuggestion(
+      String beforeFen, String playedFrom, String playedTo, bool isPlayerWhite) {
+    try {
+      final game = ch.Chess.fromFEN(beforeFen);
+      final moves = game.generate_moves();
+      if (moves.length <= 1) return null;
+
+      int bestEval = -999999;
+      ch.Move? bestMove;
+
+      for (final move in moves) {
+        // Skip the move the player already made
+        if (move.fromAlgebraic == playedFrom &&
+            move.toAlgebraic == playedTo) {
+          continue;
+        }
+
+        game.move(move);
+        final eval = isPlayerWhite
+            ? AIService.evaluatePosition(game.fen)
+            : -AIService.evaluatePosition(game.fen);
+        game.undo_move();
+
+        if (eval > bestEval) {
+          bestEval = eval;
+          bestMove = move;
+        }
+      }
+
+      if (bestMove == null) return null;
+      return '${bestMove.fromAlgebraic}${bestMove.toAlgebraic}';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ── Tip: contextual opening/midgame principle ──────────────────────────────
+
+  static String _getTip(
+    ch.PieceType? type,
+    String to,
+    int movesPlayed,
+    bool isCapture,
+    bool isCheck,
+    bool isCheckmate,
+  ) {
+    if (isCheckmate) return '';
+    if (isCheck) return 'Checks force responses — use them to gain tempo.';
+
+    final rank = int.tryParse(to[1]) ?? 0;
+
+    if (movesPlayed < 8) {
+      // Opening principles
+      if (type == ch.PieceType.QUEEN) {
+        return "Don't develop the queen too early — it can be chased by opponent pieces.";
+      }
+      if (type == ch.PieceType.KNIGHT || type == ch.PieceType.BISHOP) {
+        return 'Develop knights and bishops before rooks and queen in the opening.';
+      }
+      if (type == ch.PieceType.PAWN) {
+        final centerFiles = ['d', 'e'];
+        if (centerFiles.contains(to[0])) {
+          return 'Central pawns control space and open lines for your pieces.';
+        }
+        return 'Avoid moving too many pawns in the opening — develop your pieces first.';
+      }
+      if (type == ch.PieceType.KING) {
+        return 'Castle early to keep your king safe and connect your rooks.';
+      }
+      if (type == ch.PieceType.ROOK) {
+        return 'Rooks are best on open files — place them after the center opens up.';
+      }
+    }
+
+    if (movesPlayed >= 8 && movesPlayed < 20) {
+      // Middlegame tips
+      if (type == ch.PieceType.ROOK) {
+        return 'Rooks belong on open or semi-open files where they control space.';
+      }
+      if (type == ch.PieceType.KNIGHT) {
+        return 'Knights are strongest in the center — outposts on d5/e5 are ideal.';
+      }
+      if (type == ch.PieceType.BISHOP) {
+        return 'Bishops thrive on long diagonals with open lines.';
+      }
+      if (type == ch.PieceType.PAWN && rank >= 5) {
+        return 'Advanced pawns create threats — support them with your pieces.';
+      }
+    }
+
+    if (movesPlayed >= 20) {
+      // Endgame tips
+      if (type == ch.PieceType.KING) {
+        return 'In the endgame, activate your king — it becomes a powerful attacker.';
+      }
+      if (type == ch.PieceType.PAWN) {
+        return 'Passed pawns are powerful in the endgame — push them toward promotion.';
+      }
+    }
+
+    return '';
+  }
+
+  // ── Tactics detection ─────────────────────────────────────────────────────
+
+  static List<String> _detectTactics({
+    required ch.Chess gameAfter,
+    required String to,
+    required ch.Piece? movingPiece,
+    required bool isPlayerWhite,
+    required bool isCheck,
+    required bool isCheckmate,
+    required bool isCapture,
+    required ch.Piece? capturedPiece,
+    required String? pinTarget,
+  }) {
+    final tactics = <String>[];
+
+    if (isCheckmate) {
+      tactics.add('Checkmate');
+      return tactics; // No need to add other tags
+    }
+    if (isCheck) tactics.add('Check');
+    if (isCapture && capturedPiece != null) {
+      const valuablePieces = [
+        ch.PieceType.QUEEN,
+        ch.PieceType.ROOK,
+        ch.PieceType.BISHOP,
+        ch.PieceType.KNIGHT,
+      ];
+      if (valuablePieces.contains(capturedPiece.type)) {
+        tactics.add('Capture');
+      }
+    }
+    if (pinTarget != null) tactics.add('Pin');
+
+    // Promotion threat: pawn on 7th rank (white) or 2nd rank (black)
+    if (movingPiece?.type == ch.PieceType.PAWN) {
+      final rank = int.tryParse(to[1]) ?? 0;
+      final isPromoThreat = isPlayerWhite ? rank == 7 : rank == 2;
+      if (isPromoThreat) tactics.add('Promotion');
+    }
+
+    return tactics;
+  }
+
   // ── Tactical detectors ────────────────────────────────────────────────────
 
-  /// Returns squares of player's pieces that are hanging (attacked but undefended).
   static List<String> _findHangingPieces(ch.Chess game, bool forWhite) {
     final color = forWhite ? ch.Color.WHITE : ch.Color.BLACK;
     final oppColor = forWhite ? ch.Color.BLACK : ch.Color.WHITE;
@@ -246,11 +415,8 @@ class CoachService {
         final sqIdx = ch.Chess.SQUARES[sq];
         if (sqIdx == null) continue;
 
-        // Check if any opponent piece attacks this square
         final isAttacked = game.attacked(oppColor, sqIdx);
         if (!isAttacked) continue;
-
-        // Check if defended by own piece
         final isDefended = game.attacked(color, sqIdx);
         if (!isDefended) result.add(sq);
       }
@@ -258,56 +424,7 @@ class CoachService {
     return result;
   }
 
-  /// Detects if the player's last move creates a fork opportunity.
-  /// Returns the square being forked, or null.
-  static String? _detectFork(ch.Chess game, bool isPlayerWhite) {
-    try {
-      final color = isPlayerWhite ? ch.Color.WHITE : ch.Color.BLACK;
-      final oppColor = isPlayerWhite ? ch.Color.BLACK : ch.Color.WHITE;
-
-      const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-      for (int rank = 1; rank <= 8; rank++) {
-        for (final file in files) {
-          final sq = '$file$rank';
-          final piece = game.get(sq);
-          if (piece == null || piece.color != color) continue;
-
-          // Find all squares this piece attacks
-          final attacked = <String>[];
-          for (int r2 = 1; r2 <= 8; r2++) {
-            for (final f2 in files) {
-              final sq2 = '$f2$r2';
-              if (sq2 == sq) continue;
-              final target = game.get(sq2);
-              final sq2Idx = ch.Chess.SQUARES[sq2];
-              if (target != null &&
-                  target.color == oppColor &&
-                  sq2Idx != null &&
-                  game.attacked(color, sq2Idx)) {
-                attacked.add(sq2);
-              }
-            }
-          }
-
-          // Fork = attacking 2+ valuable pieces simultaneously
-          final valuable = attacked.where((s) {
-            final p = game.get(s);
-            return p != null &&
-                (p.type == ch.PieceType.QUEEN ||
-                    p.type == ch.PieceType.ROOK ||
-                    p.type == ch.PieceType.KING);
-          }).toList();
-          if (valuable.length >= 2) return sq;
-        }
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  /// Detects if the player's move creates a pin. Returns pinned square or null.
   static String? _detectPin(ch.Chess game, bool isPlayerWhite) {
-    // Simplified: check if a sliding piece (bishop/rook/queen) is lined up
-    // behind an opponent piece toward the king
     try {
       final color = isPlayerWhite ? ch.Color.WHITE : ch.Color.BLACK;
       final oppColor = isPlayerWhite ? ch.Color.BLACK : ch.Color.WHITE;
@@ -351,7 +468,7 @@ class CoachService {
               } else if (p.color == oppColor &&
                   firstOppSq != null &&
                   p.type == ch.PieceType.KING) {
-                return firstOppSq; // pin detected
+                return firstOppSq;
               } else {
                 break;
               }
