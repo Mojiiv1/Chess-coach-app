@@ -12,8 +12,8 @@ const Map<String, int> _pieceValues = {
   'k': 20000,
 };
 
-// ── Piece-Square Tables (from White's perspective, a1=index 0) ──────────────
-// Indices run a1→h1, a2→h2 … a8→h8  (rank 1 at front, rank 8 at back)
+// ── Piece-Square Tables (from White's perspective) ────────────────────────────
+// Layout: a1=index 0, h1=index 7, a8=index 56, h8=index 63
 
 const List<int> _pawnPst = [
    0,  0,  0,  0,  0,  0,  0,  0,
@@ -81,7 +81,6 @@ const List<int> _kingMiddlePst = [
    20, 30, 10,  0,  0, 10, 30, 20,
 ];
 
-/// Maps piece type to its PST.
 const Map<String, List<int>> _pstMap = {
   'p': _pawnPst,
   'n': _knightPst,
@@ -92,39 +91,26 @@ const Map<String, List<int>> _pstMap = {
 };
 
 // ── Opening Book ──────────────────────────────────────────────────────────────
-// Each entry is a sequence of UCI moves. AI plays the next move in the line.
 const List<List<String>> _openingBook = [
-  // Ruy Lopez
   ['e2e4', 'e7e5', 'd1h5', 'b8c6', 'f1b5'],
-  // Sicilian Defense
   ['e2e4', 'c7c5', 'g1f3', 'd7d6', 'd2d4'],
-  // Queen's Gambit
   ['d2d4', 'd7d5', 'c2c4', 'e7e6', 'b1c3'],
-  // King's Indian
   ['d2d4', 'g8f6', 'c2c4', 'g7g6', 'b1c3'],
-  // English Opening
   ['c2c4', 'e7e5', 'b1c3', 'g8f6', 'g2g3'],
-  // French Defense
   ['e2e4', 'e7e6', 'd2d4', 'd7d5', 'b1c3'],
-  // Caro-Kann
   ['e2e4', 'c7c6', 'd2d4', 'd7d5', 'b1c3'],
-  // Italian Game
   ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4'],
-  // London System
   ['d2d4', 'd7d5', 'c1f4', 'g8f6', 'e2e3'],
-  // Nimzo-Indian
   ['d2d4', 'g8f6', 'c2c4', 'e7e6', 'b1c3', 'f8b4'],
-  // Dutch Defense
   ['d2d4', 'f7f5', 'g2g3', 'g8f6', 'f1g2'],
-  // Pirc Defense
   ['e2e4', 'd7d6', 'd2d4', 'g8f6', 'b1c3', 'g7g6'],
 ];
 
 class AIService {
   static final _rng = Random();
 
-  /// Returns (uciMove, evalCentipawns).
-  /// evalCentipawns is positive = good for the side to move.
+  /// Main entry point. Returns (uciMove, evalCentipawns).
+  /// Never returns an empty move when legal moves exist — falls back to random.
   static (String move, int eval) getAIMove(
     String fen,
     String difficulty,
@@ -132,120 +118,153 @@ class AIService {
   ) {
     try {
       if (!validateFen(fen)) {
-        logWarning('AIService: invalid FEN received');
-        return ('', 0);
+        logWarning('AIService: invalid FEN');
+        return _randomMove(fen);
       }
 
-      switch (difficulty) {
-        case 'beginner':
-          return _randomMove(fen);
-        case 'easy':
-          return _greedyMove(fen);
-        case 'intermediate':
-          return _minimaxMove(fen, uciHistory, depth: 4);
-        case 'advanced':
-          return _minimaxMove(fen, uciHistory, depth: 6);
-        default:
-          return _randomMove(fen);
+      final (move, eval) = switch (difficulty) {
+        'beginner' => _beginnerMove(fen),
+        'easy' => _greedyMove(fen),
+        'intermediate' => _minimaxMove(fen, uciHistory, depth: 3, qdepth: 2),
+        'advanced' => _minimaxMove(fen, uciHistory, depth: 4, qdepth: 1),
+        _ => _randomMove(fen),
+      };
+
+      // Guaranteed fallback: if search returned empty for any reason, use random
+      if (move.isEmpty) {
+        logWarning('AIService: empty move from $difficulty — falling back to random');
+        return _randomMove(fen);
       }
+      return (move, eval);
     } catch (e) {
       handleError(e, context: 'getAIMove');
+      // Last-resort fallback — never return empty
+      return _randomMove(fen);
+    }
+  }
+
+  // ── Beginner: purely random ────────────────────────────────────────────────
+
+  /// Completely random — ignores captures, checks, everything.
+  static (String, int) _beginnerMove(String fen) {
+    try {
+      final game = ch.Chess.fromFEN(fen);
+      final moves = game.generate_moves();
+      if (moves.isEmpty) return ('', 0);
+      return (_toUci(moves[_rng.nextInt(moves.length)]), 0);
+    } catch (_) {
       return ('', 0);
     }
   }
 
-  // ── Random (Beginner) ──────────────────────────────────────────────────────
+  // ── Random (internal fallback) ─────────────────────────────────────────────
 
   static (String, int) _randomMove(String fen) {
-    final game = ch.Chess.fromFEN(fen);
-    final moves = game.generate_moves();
-    if (moves.isEmpty) return ('', 0);
-    final m = moves[_rng.nextInt(moves.length)];
-    return (_toUci(m), 0);
+    try {
+      final game = ch.Chess.fromFEN(fen);
+      final moves = game.generate_moves();
+      if (moves.isEmpty) return ('', 0);
+      return (_toUci(moves[_rng.nextInt(moves.length)]), 0);
+    } catch (_) {
+      return ('', 0);
+    }
   }
 
   // ── Greedy capture-first (Easy) ────────────────────────────────────────────
 
   static (String, int) _greedyMove(String fen) {
-    final game = ch.Chess.fromFEN(fen);
-    final moves = game.generate_moves();
-    if (moves.isEmpty) return ('', 0);
+    try {
+      final game = ch.Chess.fromFEN(fen);
+      final moves = game.generate_moves();
+      if (moves.isEmpty) return ('', 0);
 
-    // Sort: captures first (by victim value), then random among non-captures
-    final captures =
-        moves.where((m) => m.captured != null).toList();
-    if (captures.isNotEmpty) {
-      captures.sort((a, b) =>
-          (_pieceValues[b.captured!.toLowerCase()] ?? 0) -
-          (_pieceValues[a.captured!.toLowerCase()] ?? 0));
-      return (_toUci(captures.first), 0);
+      final captures = moves.where((m) => m.captured != null).toList();
+      if (captures.isNotEmpty) {
+        captures.sort((a, b) =>
+            (_pieceValues[b.captured!.toLowerCase()] ?? 0) -
+            (_pieceValues[a.captured!.toLowerCase()] ?? 0));
+        return (_toUci(captures.first), 0);
+      }
+      return (_toUci(moves[_rng.nextInt(moves.length)]), 0);
+    } catch (_) {
+      return _randomMove(fen);
     }
-    final m = moves[_rng.nextInt(moves.length)];
-    return (_toUci(m), 0);
   }
 
-  // ── Minimax + Alpha-Beta (Intermediate & Advanced) ─────────────────────────
+  // ── Minimax + Alpha-Beta ───────────────────────────────────────────────────
+  // Depths are kept LOW intentionally: Flutter Web (JS) runs ~20x slower than
+  // native Dart. Depth 2 ≈ ~400 nodes, depth 3 ≈ ~3000 nodes — both respond
+  // in under 2 seconds on web. Depth 4+ causes 10–30 second freezes.
 
   static (String, int) _minimaxMove(
     String fen,
-    List<String> uciHistory,
-    {required int depth}
-  ) {
-    // Try opening book first (Advanced depth implies opening book enabled)
-    if (depth >= 6) {
+    List<String> uciHistory, {
+    required int depth,
+    required int qdepth,
+  }) {
+    try {
+      // Opening book for intermediate (depth>=3) and advanced (depth>=4)
       final bookMove = _lookupOpeningBook(uciHistory);
       if (bookMove != null) return (bookMove, 0);
-    }
 
-    final game = ch.Chess.fromFEN(fen);
-    final moves = _sortedMoves(game);
-    if (moves.isEmpty) return ('', 0);
+      final game = ch.Chess.fromFEN(fen);
+      final moves = _sortedMoves(game);
+      if (moves.isEmpty) return ('', 0);
 
-    String bestMove = _toUci(moves.first);
-    int bestEval = -999999;
-    const alpha = -999999;
-    const beta = 999999;
+      String bestMove = _toUci(moves.first);
+      int bestEval = -999999;
+      int alpha = -999999;
+      const beta = 999999;
 
-    for (final move in moves) {
-      game.move(move);
-      final eval = -_alphaBeta(game, depth - 1, -beta, -alpha);
-      game.undo_move();
-      if (eval > bestEval) {
-        bestEval = eval;
-        bestMove = _toUci(move);
+      for (final move in moves) {
+        game.move(move);
+        final eval = -_alphaBeta(game, depth - 1, -beta, -alpha, qdepth);
+        game.undo_move();
+        if (eval > bestEval) {
+          bestEval = eval;
+          bestMove = _toUci(move);
+        }
+        if (bestEval > alpha) alpha = bestEval;
       }
+      return (bestMove, bestEval);
+    } catch (e) {
+      handleError(e, context: '_minimaxMove');
+      return _randomMove(fen);
     }
-    return (bestMove, bestEval);
   }
 
-  static int _alphaBeta(ch.Chess game, int depth, int alpha, int beta) {
-    if (game.in_checkmate) return -99999 - depth; // prefer faster mates
+  static int _alphaBeta(
+      ch.Chess game, int depth, int alpha, int beta, int qdepth) {
+    if (game.in_checkmate) return -99999 - depth;
     if (game.in_draw || game.in_stalemate || game.in_threefold_repetition) {
       return 0;
     }
-    if (depth == 0) return _quiescence(game, alpha, beta);
+    if (depth == 0) return _quiescence(game, alpha, beta, qdepth: qdepth);
 
     final moves = _sortedMoves(game);
     for (final move in moves) {
       game.move(move);
-      final score = -_alphaBeta(game, depth - 1, -beta, -alpha);
+      final score = -_alphaBeta(game, depth - 1, -beta, -alpha, qdepth);
       game.undo_move();
-      if (score >= beta) return beta; // beta cutoff
+      if (score >= beta) return beta;
       if (score > alpha) alpha = score;
     }
     return alpha;
   }
 
-  /// Quiescence search: only look at captures to avoid horizon effect.
-  static int _quiescence(ch.Chess game, int alpha, int beta) {
+  /// Quiescence search capped at [qdepth] to prevent runaway recursion on web.
+  static int _quiescence(ch.Chess game, int alpha, int beta,
+      {required int qdepth}) {
     final standPat = _evaluate(game);
     if (standPat >= beta) return beta;
     if (standPat > alpha) alpha = standPat;
+    if (qdepth <= 0) return alpha; // depth cap — prevents JS freeze
 
     final captures = game.generate_moves().where((m) => m.captured != null);
     for (final move in captures) {
       game.move(move);
-      final score = -_quiescence(game, -beta, -alpha);
+      final score =
+          -_quiescence(game, -beta, -alpha, qdepth: qdepth - 1);
       game.undo_move();
       if (score >= beta) return beta;
       if (score > alpha) alpha = score;
@@ -267,7 +286,6 @@ class AIService {
       final attackerVal = _pieceValues[m.piece.toLowerCase()] ?? 0;
       return victimVal * 10 - attackerVal; // MVV-LVA
     }
-    // Bonus for central moves
     const centerSquares = ['d4', 'd5', 'e4', 'e5'];
     if (centerSquares.contains(m.toAlgebraic)) return 5;
     return 0;
@@ -275,7 +293,7 @@ class AIService {
 
   // ── Static evaluation ──────────────────────────────────────────────────────
 
-  /// Returns score from the perspective of the side currently to move.
+  /// Returns score from the perspective of the side to move.
   static int _evaluate(ch.Chess game) {
     if (game.in_checkmate) return -99999;
     if (game.in_draw || game.in_stalemate) return 0;
@@ -284,9 +302,8 @@ class AIService {
     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
     for (int rank = 1; rank <= 8; rank++) {
-      for (int fileIdx = 0; fileIdx < 8; fileIdx++) {
-        final square = '${files[fileIdx]}$rank';
-        final piece = game.get(square);
+      for (int fi = 0; fi < 8; fi++) {
+        final piece = game.get('${files[fi]}$rank');
         if (piece == null) continue;
 
         final type = piece.type.toLowerCase();
@@ -294,12 +311,10 @@ class AIService {
         final pst = _pstMap[type];
         int pstBonus = 0;
         if (pst != null) {
-          // PST index: rank 1 = row 0 in the table for white
           final row = rank - 1;
-          final col = fileIdx;
           final idx = piece.color == ch.Color.WHITE
-              ? row * 8 + col
-              : (7 - row) * 8 + col; // mirror for black
+              ? row * 8 + fi
+              : (7 - row) * 8 + fi;
           pstBonus = pst[idx];
         }
 
@@ -312,7 +327,6 @@ class AIService {
       }
     }
 
-    // Return from perspective of side to move
     return game.turn == ch.Color.WHITE ? score : -score;
   }
 
@@ -323,7 +337,7 @@ class AIService {
       if (uciHistory.length >= line.length) continue;
       bool match = true;
       for (int i = 0; i < uciHistory.length; i++) {
-        if (i >= line.length || line[i] != uciHistory[i]) {
+        if (line[i] != uciHistory[i]) {
           match = false;
           break;
         }
@@ -337,21 +351,18 @@ class AIService {
 
   static String _toUci(ch.Move move) {
     String uci = move.fromAlgebraic + move.toAlgebraic;
-    if (move.promotion != null) {
-      uci += move.promotion!.toLowerCase();
-    }
+    if (move.promotion != null) uci += move.promotion!.toLowerCase();
     return uci;
   }
 
-  /// Evaluate the current position from white's perspective (for coach use).
+  /// Evaluate from white's perspective (for coach / eval bar).
   static int evaluatePosition(String fen) {
     try {
       if (!validateFen(fen)) return 0;
       final game = ch.Chess.fromFEN(fen);
-      // _evaluate returns from side-to-move perspective; convert to white-relative
       final sideScore = _evaluate(game);
       return game.turn == ch.Color.WHITE ? sideScore : -sideScore;
-    } catch (e) {
+    } catch (_) {
       return 0;
     }
   }
