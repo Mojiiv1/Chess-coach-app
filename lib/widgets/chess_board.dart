@@ -99,13 +99,25 @@ class ChessBoard extends StatelessWidget {
                             ),
 
                           // ── Piece ─────────────────────────────────────────
-                          if (piece != null)
-                            Center(
-                              child: RepaintBoundary(
-                                key: ValueKey('piece_$squareName'),
-                                child: _PieceWidget(piece: piece),
+                          Center(
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 180),
+                              transitionBuilder: (child, animation) =>
+                                  ScaleTransition(
+                                scale: animation,
+                                child: FadeTransition(
+                                    opacity: animation, child: child),
                               ),
+                              child: piece != null
+                                  ? RepaintBoundary(
+                                      key: ValueKey(
+                                          '${piece.type}_${piece.color}_$squareName'),
+                                      child: _PieceWidget(piece: piece),
+                                    )
+                                  : SizedBox.shrink(
+                                      key: ValueKey('empty_$squareName')),
                             ),
+                          ),
 
                           // ── Coordinate labels ─────────────────────────────
                           if (showRankLabel)

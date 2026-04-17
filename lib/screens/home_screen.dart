@@ -58,7 +58,8 @@ class _HomeScreenState extends State<HomeScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF0F0C2E), Color(0xFF1A1040), Color(0xFF0D1A50)],
+            colors: [Color(0xFF0D1B2A), Color(0xFF16213E), Color(0xFF0F3460)],
+          stops: [0.0, 0.5, 1.0],
           ),
         ),
         child: SafeArea(
@@ -97,17 +98,24 @@ class _HomeScreenState extends State<HomeScreen>
             height: 110,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [kPrimaryAccent, kSecondaryAccent],
+                colors: [Color(0xFF6366F1), Color(0xFF0EA5E9)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(28),
               boxShadow: [
                 BoxShadow(
-                  color: kPrimaryAccent
-                      .withAlpha((80 + (_glowAnim.value * 100)).round()),
-                  blurRadius: 20 + (_glowAnim.value * 20),
-                  spreadRadius: 2 + (_glowAnim.value * 4),
+                  color: const Color(0xFF6366F1).withAlpha(
+                      (120 + (_glowAnim.value * 100)).round()),
+                  blurRadius: 28 + (_glowAnim.value * 22),
+                  spreadRadius: 3 + (_glowAnim.value * 6),
+                ),
+                BoxShadow(
+                  color: const Color(0xFF0EA5E9)
+                      .withAlpha((60 + (_glowAnim.value * 60)).round()),
+                  blurRadius: 14 + (_glowAnim.value * 10),
+                  spreadRadius: 1,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
