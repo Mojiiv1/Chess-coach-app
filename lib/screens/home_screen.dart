@@ -1,9 +1,12 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/stats_service.dart';
+import '../services/save_game_service.dart';
 import '../models/game_stats.dart';
 import '../utils/constants.dart';
 import 'game_screen.dart';
+import 'game_mode_selection_screen.dart';
+import 'saved_games_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,6 +18,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late GameStats _stats;
+  bool _hasSavedGames = false;
   late AnimationController _animCtrl;
   late Animation<double> _fadeIn;
 
@@ -22,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen>
   void initState() {
     super.initState();
     _stats = StatsService.getStats();
+    _hasSavedGames = SaveGameService.hasSavedGames;
     _animCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 900));
     _fadeIn = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
@@ -35,7 +40,10 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _refreshStats() {
-    setState(() => _stats = StatsService.getStats());
+    setState(() {
+      _stats = StatsService.getStats();
+      _hasSavedGames = SaveGameService.hasSavedGames;
+    });
   }
 
   @override
@@ -46,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)],
+            colors: [Color(0xFF0F0C2E), Color(0xFF1A1040), Color(0xFF0D1A50)],
           ),
         ),
         child: SafeArea(
@@ -58,28 +66,36 @@ class _HomeScreenState extends State<HomeScreen>
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   _buildHeader(),
-                  const SizedBox(height: 36),
+                  const SizedBox(height: 32),
                   _buildStatsCard(),
-                  const SizedBox(height: 36),
-                  _buildNewGameButton(context),
-                  const SizedBox(height: 16),
-                  _buildSecondaryButton(
-                    label: 'Statistics',
-                    icon: Icons.bar_chart_rounded,
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const StatsScreen()),
-                      );
-                      _refreshStats();
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _buildSecondaryButton(
-                    label: 'Settings',
-                    icon: Icons.settings_rounded,
-                    onTap: null, // placeholder
+                  const SizedBox(height: 32),
+                  _buildGameModeButtons(context),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildSecondaryButton(
+                          label: 'Statistics',
+                          icon: Icons.bar_chart_rounded,
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const StatsScreen()),
+                            );
+                            _refreshStats();
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildSecondaryButton(
+                          label: 'Settings',
+                          icon: Icons.settings_rounded,
+                          onTap: null,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -105,13 +121,13 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             boxShadow: [
               BoxShadow(
-                color: kPrimaryAccent.withAlpha(100),
-                blurRadius: 20,
+                color: kPrimaryAccent.withAlpha(120),
+                blurRadius: 24,
                 offset: const Offset(0, 8),
               ),
             ],
           ),
-          child: const Icon(Icons.psychology_rounded,
+          child: const Icon(Icons.castle_rounded,
               size: 52, color: Colors.white),
         ),
         const SizedBox(height: 18),
@@ -173,11 +189,11 @@ class _HomeScreenState extends State<HomeScreen>
                   _StatPill(
                       label: 'Wins',
                       value: '${_stats.wins}',
-                      color: const Color(0xFF66BB6A)),
+                      color: kGoodMove),
                   _StatPill(
                       label: 'Losses',
                       value: '${_stats.losses}',
-                      color: const Color(0xFFEF5350)),
+                      color: kBadMove),
                   _StatPill(
                       label: 'Draws',
                       value: '${_stats.draws}',
@@ -195,51 +211,65 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildNewGameButton(BuildContext context) {
-    return GestureDetector(
-      onTap: () async {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const GameScreen()),
-        );
-        _refreshStats();
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [kPrimaryAccent, kSecondaryAccent],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: kPrimaryAccent.withAlpha(100),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
-            SizedBox(width: 10),
-            Text(
-              'New Game',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
+  Widget _buildGameModeButtons(BuildContext context) {
+    return Column(
+      children: [
+        _GameModeButton(
+          icon: Icons.play_arrow_rounded,
+          title: 'Play vs AI',
+          subtitle: 'Challenge the computer',
+          gradientColors: const [Color(0xFF4158D0), Color(0xFF2196F3)],
+          shadowColor: const Color(0xFF4158D0),
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const GameModeSelectionScreen(
+                  gameMode: GameMode.playerVsAI,
+                ),
               ),
-            ),
-          ],
+            );
+            _refreshStats();
+          },
         ),
-      ),
+        const SizedBox(height: 12),
+        _GameModeButton(
+          icon: Icons.people_rounded,
+          title: 'Local Multiplayer',
+          subtitle: 'Player 1 vs Player 2',
+          gradientColors: const [Color(0xFF00BCD4), Color(0xFF0097A7)],
+          shadowColor: kSecondaryAccent,
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const GameModeSelectionScreen(
+                  gameMode: GameMode.localMultiplayer,
+                ),
+              ),
+            );
+            _refreshStats();
+          },
+        ),
+        if (_hasSavedGames) ...[
+          const SizedBox(height: 12),
+          _GameModeButton(
+            icon: Icons.folder_open_rounded,
+            title: 'Continue Game',
+            subtitle: 'Resume a saved game',
+            gradientColors: const [Color(0xFF2E7D32), Color(0xFF388E3C)],
+            shadowColor: kGoodMove,
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const SavedGamesScreen()),
+              );
+              _refreshStats();
+            },
+          ),
+        ],
+      ],
     );
   }
 
@@ -257,7 +287,6 @@ class _HomeScreenState extends State<HomeScreen>
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
             child: Container(
-              width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
                 color: Colors.white.withAlpha(14),
@@ -268,13 +297,13 @@ class _HomeScreenState extends State<HomeScreen>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(icon, color: Colors.white70, size: 22),
-                  const SizedBox(width: 10),
+                  Icon(icon, color: Colors.white70, size: 20),
+                  const SizedBox(width: 8),
                   Text(
                     label,
                     style: const TextStyle(
                         color: Colors.white70,
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.w500),
                   ),
                 ],
@@ -286,6 +315,93 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 }
+
+// ── Game Mode Button ──────────────────────────────────────────────────────────
+
+class _GameModeButton extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final List<Color> gradientColors;
+  final Color shadowColor;
+  final VoidCallback onTap;
+
+  const _GameModeButton({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.gradientColors,
+    required this.shadowColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: gradientColors,
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: shadowColor.withAlpha(90),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(35),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: Colors.white, size: 26),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(190),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios_rounded,
+                color: Colors.white.withAlpha(180), size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Stat Pill ─────────────────────────────────────────────────────────────────
 
 class _StatPill extends StatelessWidget {
   final String label;
@@ -310,6 +426,8 @@ class _StatPill extends StatelessWidget {
   }
 }
 
+// ── Result Badge ──────────────────────────────────────────────────────────────
+
 class _ResultBadge extends StatelessWidget {
   final String result;
   const _ResultBadge({required this.result});
@@ -317,8 +435,8 @@ class _ResultBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (result) {
-      'win' => ('Last: Win', const Color(0xFF66BB6A)),
-      'loss' => ('Last: Loss', const Color(0xFFEF5350)),
+      'win' => ('Last: Win', kGoodMove),
+      'loss' => ('Last: Loss', kBadMove),
       _ => ('Last: Draw', Colors.white54),
     };
     return Container(
@@ -354,16 +472,12 @@ class _StatsScreenState extends State<StatsScreen> {
     return Scaffold(
       backgroundColor: kBackground,
       appBar: AppBar(
-        backgroundColor: kSurface,
-        foregroundColor: Colors.white,
         title: const Text('Statistics',
             style: TextStyle(fontWeight: FontWeight.w700)),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
-            onPressed: () {
-              _showResetDialog(context);
-            },
+            onPressed: () => _showResetDialog(context),
             tooltip: 'Reset Stats',
           ),
         ],
@@ -374,17 +488,14 @@ class _StatsScreenState extends State<StatsScreen> {
           children: [
             _buildWinRateCircle(),
             const SizedBox(height: 32),
-            _buildStatCard(
-                'Wins', _stats.wins, _stats.gamesPlayed, Icons.emoji_events,
-                const Color(0xFF66BB6A)),
+            _buildStatCard('Wins', _stats.wins, _stats.gamesPlayed,
+                Icons.emoji_events, kGoodMove),
             const SizedBox(height: 12),
-            _buildStatCard(
-                'Losses', _stats.losses, _stats.gamesPlayed, Icons.sentiment_dissatisfied,
-                const Color(0xFFEF5350)),
+            _buildStatCard('Losses', _stats.losses, _stats.gamesPlayed,
+                Icons.sentiment_dissatisfied, kBadMove),
             const SizedBox(height: 12),
-            _buildStatCard(
-                'Draws', _stats.draws, _stats.gamesPlayed, Icons.handshake,
-                Colors.white54),
+            _buildStatCard('Draws', _stats.draws, _stats.gamesPlayed,
+                Icons.handshake, Colors.white54),
             const SizedBox(height: 24),
             Text(
               'Total Games: ${_stats.gamesPlayed}',
@@ -408,8 +519,7 @@ class _StatsScreenState extends State<StatsScreen> {
               value: _stats.winRatePercentage / 100,
               strokeWidth: 12,
               backgroundColor: Colors.white12,
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(kPrimaryAccent),
+              valueColor: const AlwaysStoppedAnimation<Color>(kPrimaryAccent),
             ),
             Column(
               mainAxisSize: MainAxisSize.min,
@@ -491,7 +601,8 @@ class _StatsScreenState extends State<StatsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            child: const Text('Cancel',
+                style: TextStyle(color: Colors.white54)),
           ),
           TextButton(
             onPressed: () async {
@@ -500,8 +611,7 @@ class _StatsScreenState extends State<StatsScreen> {
               setState(() => _stats = StatsService.getStats());
               Navigator.pop(ctx);
             },
-            child: const Text('Reset',
-                style: TextStyle(color: Color(0xFFEF5350))),
+            child: Text('Reset', style: TextStyle(color: kBadMove)),
           ),
         ],
       ),
