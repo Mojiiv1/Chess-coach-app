@@ -113,8 +113,6 @@ class _GameScreenState extends State<GameScreen> {
     setState(() {
       _lastFeedback = feedback;
       _evalBar = newEval;
-      _aiThinking =
-          widget.gameMode == GameMode.playerVsAI && !_game.isGameOver;
     });
 
     _scrollHistoryToEnd();
@@ -131,7 +129,15 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
 
-    Timer(const Duration(milliseconds: 700), _executeAIMove);
+    _scheduleAIMove();
+  }
+
+  void _scheduleAIMove() {
+    if (_aiThinking) return;
+    setState(() => _aiThinking = true);
+    Timer(const Duration(milliseconds: 600), () {
+      if (mounted) _executeAIMove();
+    });
   }
 
   Future<void> _executeAIMove() async {
@@ -140,6 +146,10 @@ class _GameScreenState extends State<GameScreen> {
       final (uciMove, _) = await Future(
         () => AIService.getAIMove(_game.fen, _difficulty, _game.uciHistory),
       );
+      if (!mounted) return;
+
+      // Brief pause so "Thinking…" is visible before the board updates.
+      await Future.delayed(const Duration(milliseconds: 200));
       if (!mounted) return;
 
       if (uciMove.isNotEmpty) {
