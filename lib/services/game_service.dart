@@ -84,6 +84,14 @@ class GameService {
     _uciHistory.clear();
   }
 
+  void loadFromFen(String fen, List<String> uciHistory) {
+    _chess = ch.Chess.fromFEN(fen);
+    _history.clear();
+    _uciHistory
+      ..clear()
+      ..addAll(uciHistory);
+  }
+
   /// Returns the piece type at [square] (lowercase), or null if empty.
   String? pieceAt(String square) =>
       _chess.get(square)?.type.toLowerCase();

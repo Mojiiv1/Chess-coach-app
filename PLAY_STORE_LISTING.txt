@@ -1,0 +1,77 @@
+====================================================
+PLAY STORE LISTING REFERENCE — Chess Coach AI
+====================================================
+App ID (applicationId): com.mojiiv.chesscoach
+Version: 1.0.0 (versionCode 1)
+====================================================
+
+--- SHORT DESCRIPTION (max 80 chars) ---
+Play chess and learn from an AI coach that analyzes your every move.
+
+--- FULL DESCRIPTION (max 4000 chars) ---
+Chess Coach AI is your personal chess trainer — always available, completely offline.
+
+Play against a powerful AI opponent at four difficulty levels, from beginner-friendly random moves to an advanced engine with deep search and opening-book knowledge. After each game, the built-in coach reviews your moves, flags blunders, identifies tactical patterns (forks, pins, hanging pieces), and explains how to improve.
+
+FEATURES
+
+• Four AI difficulty levels — Beginner, Easy, Intermediate, Advanced
+• Real-time move evaluation bar showing position advantage at a glance
+• Coach panel with actionable post-move feedback
+• Tactical pattern detection: hanging pieces, forks, pins
+• Save games mid-session and resume them later
+• Local multiplayer — pass-and-play on one device
+• Full move history in standard algebraic notation (SAN)
+• Win/loss/draw statistics tracked across sessions
+• 100% offline — no internet required, no account needed, no ads
+
+PRIVACY
+
+Chess Coach AI collects no personal data of any kind. All game data stays on your device. See the full privacy policy for details.
+
+--- CATEGORY ---
+Games > Board
+
+--- CONTENT RATING ---
+Everyone (ESRB / PEGI 3)
+No violence, no ads, no in-app purchases, no user-generated content
+
+--- PRIVACY POLICY URL ---
+[Host PRIVACY.md at a public URL, e.g. GitHub Pages, before submission]
+Example: https://mojiiv.github.io/chess-coach-ai/privacy
+
+====================================================
+KEYSTORE SETUP (before building for release)
+====================================================
+
+1. Generate keystore (run this yourself — do NOT share the output):
+   keytool -genkey -v \
+     -keystore ~/chess-coach-release.jks \
+     -keyalg RSA -keysize 2048 -validity 10000 \
+     -alias chess-coach-key
+
+2. Create android/key.properties (already in .gitignore):
+   storePassword=<your-store-password>
+   keyPassword=<your-key-password>
+   keyAlias=chess-coach-key
+   storeFile=<absolute-path-to>/chess-coach-release.jks
+
+3. Build signed release AAB:
+   flutter build appbundle --release
+
+4. The output will be at:
+   build/app/outputs/bundle/release/app-release.aab
+
+====================================================
+PLAY STORE SUBMISSION CHECKLIST
+====================================================
+[ ] Keystore created and key.properties configured
+[ ] Release AAB built and verified (not debug-signed)
+[ ] App icon replaced (replace android/app/src/main/res/mipmap-*/ic_launcher*)
+[ ] Privacy policy hosted at a public URL
+[ ] Screenshots taken on a real device (min 2, max 8 per device type)
+[ ] Feature graphic created (1024x500 px)
+[ ] Play Console developer account set up (one-time $25 fee)
+[ ] App content rating questionnaire completed in Play Console
+[ ] Privacy policy URL entered in Play Console
+====================================================

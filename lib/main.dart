@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'services/stats_service.dart';
+import 'services/save_game_service.dart';
 import 'screens/home_screen.dart';
 import 'utils/constants.dart';
 
@@ -14,6 +15,7 @@ void main() async {
   ]);
 
   await StatsService.init();
+  await SaveGameService.init();
 
   runApp(const ChessCoachApp());
 }

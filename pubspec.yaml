@@ -1,6 +1,7 @@
 name: chesscoach_ai
-description: "Chess Coach AI - Play and learn chess with an intelligent coach"
+description: "Chess Coach AI - Play and learn chess with an AI coach that analyzes your moves and teaches strategy."
 publish_to: 'none'
+homepage: https://github.com/mojiiv/chess-coach-ai
 
 version: 1.0.0+1
 
