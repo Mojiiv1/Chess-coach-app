@@ -2,6 +2,13 @@
 // Loaded by StockfishService via: new Worker('stockfish_worker.js')
 // stockfish.js must live at the same path root (web/).
 
+// Web Workers don't have `window` — shim it to `self` so stockfish-18-asm.js
+// browser-detection code doesn't throw a silent ReferenceError.
+var window = self;
+// Some ASM.js builds probe document.currentScript.src to locate the .wasm
+// file or construct a worker URL. Stub it out so those checks don't crash.
+var document = { currentScript: { src: 'stockfish.js' } };
+
 // Provide a minimal CommonJS environment so the stockfish module can export itself.
 var exports = {};
 var module = { exports: exports };
