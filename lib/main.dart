@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'services/stats_service.dart';
 import 'services/save_game_service.dart';
+import 'services/stockfish_service.dart';
 import 'screens/home_screen.dart';
 import 'utils/constants.dart';
 
@@ -16,6 +18,15 @@ void main() async {
 
   await StatsService.init();
   await SaveGameService.init();
+
+  // Temporary Stockfish smoke test — remove after integration is verified.
+  if (kIsWeb) {
+    const startingFen =
+        'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    StockfishService.instance
+        .evaluatePosition(startingFen, depth: 10)
+        .then((r) => debugPrint('[Stockfish test] Starting position: $r'));
+  }
 
   runApp(const ChessCoachApp());
 }
