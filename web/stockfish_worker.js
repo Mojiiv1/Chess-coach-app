@@ -22,52 +22,75 @@ function startEngine(sf) {
   self.postMessage('[worker] engine acquired: ' + typeof sf);
 
   // ── Output ────────────────────────────────────────────────────────────────
-  // v18 ASM.js routes all print() calls through d.listener when set.
-  // Try every known API so we work regardless of exact build variant.
+  // v18 ASM.js routes print() through d.listener; we passed it in the factory
+  // config too, so output is captured from the very first call.  Register all
+  // other known variants defensively.
   var outputFn = function (line) { self.postMessage(line); };
   if (typeof sf.addMessageListener === 'function') sf.addMessageListener(outputFn);
-  // Set listener-style properties only if they're not already functions
-  // (avoids stomping a real method with our callback).
-  if (typeof sf.onmessage !== 'function')  sf.onmessage = outputFn;
-  if (typeof sf.listen    !== 'function')  sf.listen    = outputFn;
-  if (typeof sf.listener  !== 'function')  sf.listener  = outputFn;
+  if (typeof sf.onmessage !== 'function') sf.onmessage = outputFn;
+  if (typeof sf.listen    !== 'function') sf.listen    = outputFn;
+  if (typeof sf.listener  !== 'function') sf.listener  = outputFn;
 
-  // ── Input ─────────────────────────────────────────────────────────────────
-  // The module installs   onmessage = onmessage || function(A){w.processCommand(A.data)}
-  // during async engine init, just before it resolves the promise.
-  // Capture that handler here — it is the bridge to w.processCommand.
-  var moduleHandler = (typeof self.onmessage === 'function') ? self.onmessage : null;
+  // ── Input (with retry) ────────────────────────────────────────────────────
+  // In this build the module installs its w.processCommand bridge via
+  //   onmessage = onmessage || function(A){ w.processCommand(A.data) }
+  // in a callback that fires AFTER the factory promise resolves.
+  // Poll self.onmessage for up to ~1 second (100 × 10 ms) until it appears.
+  function tryConnectInput(attemptsLeft) {
+    // Check direct APIs on the engine object first.
+    var hasDirect = (
+      typeof sf.processCommand === 'function' ||
+      typeof sf.postMessage    === 'function' ||
+      typeof sf.send           === 'function' ||
+      typeof sf.cmd            === 'function'
+    );
+    // Capture the module's own self.onmessage bridge if it has been installed.
+    var moduleHandler = (typeof self.onmessage === 'function') ? self.onmessage : null;
 
-  function sendToEngine(cmd) {
-    // Try every known direct API first, then fall back to the module's handler.
-    if (typeof sf.processCommand === 'function') { sf.processCommand(cmd); return; }
-    if (typeof sf.postMessage     === 'function') { sf.postMessage(cmd);     return; }
-    if (typeof sf.send            === 'function') { sf.send(cmd);            return; }
-    if (typeof sf.cmd             === 'function') { sf.cmd(cmd);             return; }
-    if (moduleHandler)                            { moduleHandler({ data: cmd }); return; }
-    self.postMessage('[worker] ERROR: no input API found for cmd: ' + cmd);
+    if (!hasDirect && !moduleHandler) {
+      if (attemptsLeft > 0) {
+        setTimeout(function () { tryConnectInput(attemptsLeft - 1); }, 10);
+        return;
+      }
+      self.postMessage('[worker] ERROR: no input API found after 1s retry');
+      return;
+    }
+
+    // Input API is ready — wire it up.
+    self.postMessage('[worker] input API ready (direct=' + hasDirect +
+                     ' moduleHandler=' + (moduleHandler !== null) + ')');
+
+    function sendToEngine(cmd) {
+      if (typeof sf.processCommand === 'function') { sf.processCommand(cmd); return; }
+      if (typeof sf.postMessage    === 'function') { sf.postMessage(cmd);    return; }
+      if (typeof sf.send           === 'function') { sf.send(cmd);           return; }
+      if (typeof sf.cmd            === 'function') { sf.cmd(cmd);            return; }
+      if (moduleHandler)                           { moduleHandler({ data: cmd }); return; }
+      self.postMessage('[worker] ERROR: no input API for cmd: ' + cmd);
+    }
+
+    // Override self.onmessage so Dart commands reach the engine.
+    self.onmessage = function (event) {
+      var cmd = (event && event.data !== undefined) ? event.data : event;
+      if (typeof cmd === 'string') sendToEngine(cmd);
+    };
+
+    // Flush anything queued before engine was ready.
+    pendingCmds.forEach(function (c) { sendToEngine(c); });
+    pendingCmds = [];
+
+    // Kick off UCI handshake.
+    sendToEngine('uci');
   }
 
-  // Override self.onmessage so Dart messages reach the engine.
-  self.onmessage = function (event) {
-    var cmd = (event && event.data !== undefined) ? event.data : event;
-    if (typeof cmd === 'string') sendToEngine(cmd);
-  };
-
-  // Flush any commands that were queued before engine was ready.
-  pendingCmds.forEach(function (c) { sendToEngine(c); });
-  pendingCmds = [];
-
-  // Kick off UCI handshake.
-  sendToEngine('uci');
+  tryConnectInput(100); // up to ~1 second
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
 if (typeof StockfishExport === 'function') {
-  // Factory pattern. Pass listener in the config object so d.listener is set
-  // from the very first print() call (otherwise the engine banner goes only
-  // to console.log and we get no output before startEngine runs).
+  // Factory pattern. Pass listener in the config so d.listener is set from
+  // the first print() call (engine banner flows to Dart rather than console.log).
   var result = StockfishExport({
     listener: function (line) { self.postMessage(line); }
   });
@@ -77,18 +100,16 @@ if (typeof StockfishExport === 'function') {
       self.postMessage('[worker] error: ' + err);
     });
   } else {
-    // Synchronous factory (unlikely for this build, but handle it).
-    startEngine(result);
+    startEngine(result); // synchronous factory (unlikely but handled)
   }
 } else if (StockfishExport && typeof StockfishExport === 'object') {
-  // Already-instantiated export.
-  startEngine(StockfishExport);
+  startEngine(StockfishExport); // already-instantiated export
 } else {
   self.postMessage('[worker] ERROR: unexpected module.exports type: ' + typeof StockfishExport);
 }
 
-// NOTE: we intentionally do NOT set self.onmessage here (synchronously).
-// The module installs its own handler via  onmessage = onmessage || fn
-// during async init. If we set ours first the || guard blocks theirs,
-// leaving w.processCommand unreachable. startEngine() captures and
-// wraps the module handler after the factory promise resolves.
+// NOTE: self.onmessage is NOT set synchronously here.  The module uses
+//   onmessage = onmessage || fn
+// to install its w.processCommand bridge.  Setting ours first would trip
+// the || guard.  tryConnectInput() polls until the module's handler appears,
+// then wraps it.
