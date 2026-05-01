@@ -19,14 +19,10 @@ void main() async {
   await StatsService.init();
   await SaveGameService.init();
 
-  // Temporary Stockfish smoke test — remove after integration is verified.
-  if (kIsWeb) {
-    const startingFen =
-        'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-    StockfishService.instance
-        .evaluatePosition(startingFen, depth: 10)
-        .then((r) => debugPrint('[Stockfish test] Starting position: $r'));
-  }
+  // Pre-warm the Stockfish worker so it finishes its UCI handshake before
+  // the player makes their first move. The singleton init is triggered here;
+  // the actual engine startup happens asynchronously in the background.
+  if (kIsWeb) StockfishService.instance;
 
   runApp(const ChessCoachApp());
 }

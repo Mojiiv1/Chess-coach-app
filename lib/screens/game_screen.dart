@@ -37,6 +37,7 @@ class _GameScreenState extends State<GameScreen> {
   late String _difficulty;
   String? _savedGameId;
   CoachFeedback? _lastFeedback;
+  bool _coachAnalyzing = false;
   bool _aiThinking = false;
   bool _gameOverShown = false;
   int _evalBar = 0;
@@ -97,39 +98,44 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  void _executePlayerMove(String from, String to) {
+  Future<void> _executePlayerMove(String from, String to) async {
     final beforeFen = _game.fen;
     final move = _game.makeMove(from, to);
     if (move == null) return;
 
-    final feedback = CoachService.analyzeMove(
-      beforeFen: beforeFen,
-      from: from,
-      to: to,
-      isPlayerWhite: true,
-    );
     final newEval = AIService.evaluatePosition(_game.fen);
 
+    // Show "Analyzing…" immediately; clear any stale feedback.
     setState(() {
-      _lastFeedback = feedback;
       _evalBar = newEval;
+      _lastFeedback = null;
+      _coachAnalyzing = widget.gameMode != GameMode.localMultiplayer;
     });
 
     _scrollHistoryToEnd();
 
     if (_game.isGameOver) {
       _handleGameOver();
-      return;
     }
 
-    if (widget.gameMode == GameMode.localMultiplayer) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _showPassDeviceDialog();
-      });
-      return;
-    }
+    if (widget.gameMode == GameMode.localMultiplayer) return;
 
+    // Start the AI timer now — it runs concurrently with Stockfish analysis.
     _scheduleAIMove();
+
+    final feedback = await CoachService.analyzeMoveAsync(
+      beforeFen: beforeFen,
+      from: from,
+      to: to,
+      isPlayerWhite: true,
+    );
+
+    if (mounted) {
+      setState(() {
+        _lastFeedback = feedback;
+        _coachAnalyzing = false;
+      });
+    }
   }
 
   void _scheduleAIMove() {
@@ -170,92 +176,31 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  // ── Pass device dialog ─────────────────────────────────────────────────────
-
-  void _showPassDeviceDialog() {
-    final nextIsWhite = _game.turn == 'white';
-    final playerLabel =
-        nextIsWhite ? 'Player 1 (White)' : 'Player 2 (Black)';
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => Dialog(
-        backgroundColor: kSurface,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Transform.rotate(
-                angle: 3.14159 / 4,
-                child: const Icon(Icons.swap_horiz,
-                    size: 52, color: kPrimaryAccent),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                "$playerLabel's Turn",
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Pass the device to your opponent',
-                style: TextStyle(
-                    fontSize: 14, color: Colors.white.withAlpha(180)),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 28),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kPrimaryAccent,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text(
-                    'Ready',
-                    style: TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   // ── Save game ──────────────────────────────────────────────────────────────
 
   Future<void> _saveGame() async {
+    debugPrint('[SAVE] Save button tapped. fen=${_game.fen.substring(0, 20)}... moves=${_game.uciHistory.length}');
     final id = _savedGameId ??
         DateTime.now().millisecondsSinceEpoch.toString();
     _savedGameId = id;
 
-    await SaveGameService.saveGame(SavedGame(
-      id: id,
-      fen: _game.fen,
-      gameMode: widget.gameMode == GameMode.playerVsAI
-          ? 'playerVsAI'
-          : 'localMultiplayer',
-      difficulty:
-          widget.gameMode == GameMode.playerVsAI ? _difficulty : null,
-      uciHistory: List<String>.from(_game.uciHistory),
-      savedAt: DateTime.now(),
-      isComplete: _game.isGameOver,
-    ));
+    try {
+      await SaveGameService.saveGame(SavedGame(
+        id: id,
+        fen: _game.fen,
+        gameMode: widget.gameMode == GameMode.playerVsAI
+            ? 'playerVsAI'
+            : 'localMultiplayer',
+        difficulty:
+            widget.gameMode == GameMode.playerVsAI ? _difficulty : null,
+        uciHistory: List<String>.from(_game.uciHistory),
+        savedAt: DateTime.now(),
+        isComplete: _game.isGameOver,
+      ));
+      debugPrint('[SAVE] SaveGameService.saveGame completed without error');
+    } catch (e, st) {
+      debugPrint('[SAVE] ERROR in _saveGame: $e\n$st');
+    }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -329,8 +274,7 @@ class _GameScreenState extends State<GameScreen> {
             _resetGame();
           },
           onHome: () {
-            Navigator.pop(context);
-            Navigator.pop(context);
+            Navigator.of(context).popUntil((route) => route.isFirst);
           },
         ),
       );
@@ -343,6 +287,7 @@ class _GameScreenState extends State<GameScreen> {
       _selectedSquare = null;
       _validMoves = {};
       _lastFeedback = null;
+      _coachAnalyzing = false;
       _aiThinking = false;
       _gameOverShown = false;
       _evalBar = 0;
@@ -426,8 +371,10 @@ class _GameScreenState extends State<GameScreen> {
               isActive: _game.turn == 'white' && !_game.isGameOver,
               isThinking: false,
             ),
-            if (_lastFeedback != null && !isMulti)
-              _CoachPanel(feedback: _lastFeedback!),
+            if (!isMulti && (_coachAnalyzing || _lastFeedback != null))
+              _coachAnalyzing && _lastFeedback == null
+                  ? const _AnalyzingPanel()
+                  : _CoachPanel(feedback: _lastFeedback!),
             _MoveHistoryList(
               history: _game.history,
               scrollController: _historyScrollCtrl,
@@ -588,6 +535,41 @@ class _EvalBar extends StatelessWidget {
           ],
         );
       }),
+    );
+  }
+}
+
+class _AnalyzingPanel extends StatelessWidget {
+  const _AnalyzingPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A2E),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.5,
+              color: Colors.white38,
+            ),
+          ),
+          SizedBox(width: 8),
+          Text(
+            'Analyzing…',
+            style: TextStyle(color: Colors.white38, fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 }
