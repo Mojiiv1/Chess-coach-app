@@ -75,6 +75,19 @@ class StockfishService {
   }
 
   void _onLine(String line) {
+    // Worker diagnostics — always print so we can trace the bridge.
+    if (line.startsWith('[worker]')) {
+      debugPrint('[Stockfish] $line');
+      return;
+    }
+
+    // Log any line that carries key UCI tokens so we confirm engine output flows.
+    if (line.contains('uci') ||
+        line.contains('bestmove') ||
+        line.contains('readyok')) {
+      debugPrint('[Stockfish raw] $line');
+    }
+
     if (line == 'uciok') {
       _worker!.postMessage('isready'.toJS);
     } else if (line == 'readyok') {
