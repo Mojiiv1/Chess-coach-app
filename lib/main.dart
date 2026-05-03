@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'services/settings_service.dart';
 import 'services/stats_service.dart';
 import 'services/save_game_service.dart';
 import 'services/stockfish_service.dart';
@@ -18,6 +19,7 @@ void main() async {
 
   await StatsService.init();
   await SaveGameService.init();
+  await SettingsService.init();
 
   // Pre-warm the Stockfish worker so it finishes its UCI handshake before
   // the player makes their first move. The singleton init is triggered here;

@@ -4,6 +4,7 @@ import '../models/saved_game.dart';
 import '../services/game_service.dart';
 import '../services/ai_service.dart';
 import '../services/coach_service.dart';
+import '../services/settings_service.dart';
 import '../services/stats_service.dart';
 import '../services/save_game_service.dart';
 import '../models/move.dart';
@@ -104,12 +105,14 @@ class _GameScreenState extends State<GameScreen> {
     if (move == null) return;
 
     final newEval = AIService.evaluatePosition(_game.fen);
+    final coachEnabled = SettingsService.coachFeedbackEnabled;
 
     // Show "Analyzing…" immediately; clear any stale feedback.
     setState(() {
       _evalBar = newEval;
       _lastFeedback = null;
-      _coachAnalyzing = widget.gameMode != GameMode.localMultiplayer;
+      _coachAnalyzing =
+          widget.gameMode != GameMode.localMultiplayer && coachEnabled;
     });
 
     _scrollHistoryToEnd();
@@ -122,6 +125,8 @@ class _GameScreenState extends State<GameScreen> {
 
     // Start the AI timer now — it runs concurrently with Stockfish analysis.
     _scheduleAIMove();
+
+    if (!coachEnabled) return; // skip Stockfish analysis; panel stays hidden
 
     final feedback = await CoachService.analyzeMoveAsync(
       beforeFen: beforeFen,

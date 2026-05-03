@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../services/settings_service.dart';
 import '../services/stats_service.dart';
 import '../services/save_game_service.dart';
 import '../models/game_stats.dart';
@@ -332,11 +333,25 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               const SizedBox(height: 24),
-              _SettingItem(label: 'Sound Effects', initialValue: true),
+              _SettingItem(
+                label: 'Sound Effects',
+                initialValue: SettingsService.soundEffectsEnabled,
+                // TODO: wire to feature in next commit
+                onChanged: (val) { SettingsService.setSoundEffectsEnabled(val); },
+              ),
               const SizedBox(height: 4),
-              _SettingItem(label: 'Move Hints', initialValue: true),
+              _SettingItem(
+                label: 'Move Hints',
+                initialValue: SettingsService.moveHintsEnabled,
+                // TODO: wire to feature in next commit
+                onChanged: (val) { SettingsService.setMoveHintsEnabled(val); },
+              ),
               const SizedBox(height: 4),
-              _SettingItem(label: 'Coach Feedback', initialValue: true),
+              _SettingItem(
+                label: 'Coach Feedback',
+                initialValue: SettingsService.coachFeedbackEnabled,
+                onChanged: (val) { SettingsService.setCoachFeedbackEnabled(val); },
+              ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -511,7 +526,12 @@ class _FooterButton extends StatelessWidget {
 class _SettingItem extends StatefulWidget {
   final String label;
   final bool initialValue;
-  const _SettingItem({required this.label, required this.initialValue});
+  final ValueChanged<bool>? onChanged;
+  const _SettingItem({
+    required this.label,
+    required this.initialValue,
+    this.onChanged,
+  });
 
   @override
   State<_SettingItem> createState() => _SettingItemState();
@@ -535,7 +555,10 @@ class _SettingItemState extends State<_SettingItem> {
             style: const TextStyle(color: Colors.white70, fontSize: 15)),
         Switch(
           value: _value,
-          onChanged: (val) => setState(() => _value = val),
+          onChanged: (val) {
+            setState(() => _value = val);
+            widget.onChanged?.call(val);
+          },
           activeThumbColor: kPrimaryAccent,
           activeTrackColor: kPrimaryAccent.withAlpha(120),
         ),
