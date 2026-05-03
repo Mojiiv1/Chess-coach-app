@@ -47,7 +47,7 @@ class _GameModeSelectionScreenState extends State<GameModeSelectionScreen> {
   ];
 
   void _startGame() {
-    Navigator.pushReplacement(
+    Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => GameScreen(

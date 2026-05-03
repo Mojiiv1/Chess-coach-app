@@ -85,11 +85,47 @@ class GameService {
   }
 
   void loadFromFen(String fen, List<String> uciHistory) {
-    _chess = ch.Chess.fromFEN(fen);
+    // Replay from the start to rebuild the SAN display history.
+    // Falls back to loading the FEN directly if any move is illegal.
     _history.clear();
-    _uciHistory
-      ..clear()
-      ..addAll(uciHistory);
+    _uciHistory.clear();
+
+    _chess = ch.Chess();
+    for (final uci in uciHistory) {
+      if (uci.length < 4) break;
+      final from = uci.substring(0, 2);
+      final to = uci.substring(2, 4);
+      final movingPiece = _chess.get(from);
+      final moveMap = <String, String>{'from': from, 'to': to};
+      if (uci.length > 4) moveMap['promotion'] = uci[4];
+
+      final ok = _chess.move(moveMap);
+      if (!ok) {
+        // Corrupt history — fall back to FEN-only load
+        _chess = ch.Chess.fromFEN(fen);
+        _history.clear();
+        _uciHistory.clear();
+        return;
+      }
+
+      String san = to;
+      bool isCapture = false;
+      final verbose = _chess.getHistory({'verbose': true});
+      if (verbose.isNotEmpty) {
+        final last = verbose.last as Map;
+        san = last['san']?.toString() ?? to;
+        isCapture = last['captured'] != null;
+      }
+
+      _uciHistory.add(uci);
+      _history.add(Move(
+        from: from,
+        to: to,
+        piece: movingPiece?.type.toLowerCase() ?? '',
+        notation: san,
+        isCapture: isCapture,
+      ));
+    }
   }
 
   /// Returns the piece type at [square] (lowercase), or null if empty.

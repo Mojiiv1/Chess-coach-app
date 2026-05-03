@@ -28,12 +28,22 @@ class SavedGame {
       };
 
   factory SavedGame.fromMap(Map<dynamic, dynamic> map) => SavedGame(
-        id: map['id'] as String,
-        fen: map['fen'] as String,
-        gameMode: map['gameMode'] as String,
-        difficulty: map['difficulty'] as String?,
-        uciHistory: List<String>.from(map['uciHistory'] as List? ?? []),
-        savedAt: DateTime.parse(map['savedAt'] as String),
-        isComplete: map['isComplete'] as bool? ?? false,
+        id: (map['id'] ?? '').toString(),
+        fen: (map['fen'] ?? '').toString(),
+        gameMode: (map['gameMode'] ?? 'playerVsAI').toString(),
+        difficulty: map['difficulty']?.toString(),
+        uciHistory: _parseStringList(map['uciHistory']),
+        savedAt: _parseDateTime(map['savedAt']),
+        isComplete: map['isComplete'] == true,
       );
+
+  static List<String> _parseStringList(dynamic val) {
+    if (val is List) return val.map((e) => e.toString()).toList();
+    return [];
+  }
+
+  static DateTime _parseDateTime(dynamic val) {
+    if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
+    return DateTime.now();
+  }
 }
