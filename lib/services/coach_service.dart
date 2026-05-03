@@ -173,6 +173,9 @@ class CoachService {
       final resultAfter  = await stockfish.evaluatePosition(afterFen,  depth: 12);
 
       if (resultBefore == null || resultAfter == null) {
+        debugPrint('[CoachAsync] FALLBACK — Stockfish returned null '
+            '(resultBefore=${resultBefore?.evalCentipawns} '
+            'resultAfter=${resultAfter?.evalCentipawns})');
         return analyzeMove(
           beforeFen: beforeFen, from: from, to: to,
           isPlayerWhite: isPlayerWhite);
@@ -208,8 +211,20 @@ class CoachService {
       final pinTarget   = _detectPin(gameAfter, isPlayerWhite);
       final hangsBefore = _detectMissedCaptures(gameBefore, isPlayerWhite);
 
+      // Beginner-coaching warning: downgrade to inaccuracy if a valuable piece
+      // (knight, bishop, rook, or queen — value ≥ 320) is left hanging, even
+      // when Stockfish rates the move as good or better.
+      // Pawns are excluded — hanging a pawn is often intentional.
+      final valuableHangs = hangsAfter
+          .where((sq) => _pieceValue(gameAfter.get(sq)?.type) >= 320)
+          .toList();
+      final effectiveQuality =
+          (quality.index >= MoveQuality.good.index && valuableHangs.isNotEmpty)
+              ? MoveQuality.inaccuracy
+              : quality;
+
       final message = _buildMessage(
-        quality: quality,
+        quality: effectiveQuality,
         gameBefore: gameBefore,
         gameAfter: gameAfter,
         from: from,
@@ -218,7 +233,7 @@ class CoachService {
         isCheck: isCheck,
         isCheckmate: isCheckmate,
         movesPlayed: movesPlayed,
-        hangsAfter: hangsAfter,
+        hangsAfter: effectiveQuality != quality ? valuableHangs : hangsAfter,
         hangsBefore: hangsBefore,
         forkTarget: null,
         pinTarget: pinTarget,
@@ -242,7 +257,7 @@ class CoachService {
       );
 
       return CoachFeedback(
-        quality: quality,
+        quality: effectiveQuality,
         message: message,
         evalDelta: delta,
         suggestion: suggestion,
