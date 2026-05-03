@@ -211,35 +211,64 @@ class CoachService {
       final pinTarget   = _detectPin(gameAfter, isPlayerWhite);
       final hangsBefore = _detectMissedCaptures(gameBefore, isPlayerWhite);
 
-      // Beginner-coaching warning: downgrade to inaccuracy if a valuable piece
-      // (knight, bishop, rook, or queen — value ≥ 320) is left hanging, even
-      // when Stockfish rates the move as good or better.
-      // Pawns are excluded — hanging a pawn is often intentional.
+      // ── LPDO: Loose Pieces Drop Off ───────────────────────────────────────
+      // Primary signal: piece is currently attacked and undefended.
       final valuableHangs = hangsAfter
           .where((sq) => _pieceValue(gameAfter.get(sq)?.type) >= 320)
           .toList();
+
+      // Secondary signal: opponent's Stockfish best-response would capture
+      // one of our valuable pieces. Only checked when nothing is already
+      // immediately hanging, to avoid double-counting the same piece.
+      String? loosePieceMessage;
+      final oppBestUci = resultAfter.bestMove;
+      int capValue = 0;
+      if (valuableHangs.isEmpty && oppBestUci.length >= 4) {
+        final oppTo = oppBestUci.substring(2, 4);
+        final targetPiece = gameAfter.get(oppTo);
+        final ourColor = isPlayerWhite ? ch.Color.WHITE : ch.Color.BLACK;
+        if (targetPiece != null && targetPiece.color == ourColor) {
+          capValue = _pieceValue(targetPiece.type);
+          if (capValue >= 320) {
+            final oppBestSan = _uciToSan(oppBestUci, afterFen) ?? oppBestUci;
+            loosePieceMessage =
+                'Inaccuracy. Watch out — your ${_pieceName(targetPiece.type)} '
+                'on $oppTo is vulnerable. Opponent can play $oppBestSan next.';
+          }
+        }
+      }
+
+      debugPrint('[CoachLoose] oppBest=$oppBestUci capValue=$capValue '
+          '→ loose=${loosePieceMessage != null}');
+
       final effectiveQuality =
-          (quality.index >= MoveQuality.good.index && valuableHangs.isNotEmpty)
+          (quality.index >= MoveQuality.good.index &&
+                  (valuableHangs.isNotEmpty || loosePieceMessage != null))
               ? MoveQuality.inaccuracy
               : quality;
 
-      final message = _buildMessage(
-        quality: effectiveQuality,
-        gameBefore: gameBefore,
-        gameAfter: gameAfter,
-        from: from,
-        to: to,
-        isCapture: isCapture,
-        isCheck: isCheck,
-        isCheckmate: isCheckmate,
-        movesPlayed: movesPlayed,
-        hangsAfter: effectiveQuality != quality ? valuableHangs : hangsAfter,
-        hangsBefore: hangsBefore,
-        forkTarget: null,
-        pinTarget: pinTarget,
-        delta: delta,
-        isPlayerWhite: isPlayerWhite,
-      );
+      final String message;
+      if (loosePieceMessage != null && quality.index >= MoveQuality.good.index) {
+        message = loosePieceMessage;
+      } else {
+        message = _buildMessage(
+          quality: effectiveQuality,
+          gameBefore: gameBefore,
+          gameAfter: gameAfter,
+          from: from,
+          to: to,
+          isCapture: isCapture,
+          isCheck: isCheck,
+          isCheckmate: isCheckmate,
+          movesPlayed: movesPlayed,
+          hangsAfter: effectiveQuality != quality ? valuableHangs : hangsAfter,
+          hangsBefore: hangsBefore,
+          forkTarget: null,
+          pinTarget: pinTarget,
+          delta: delta,
+          isPlayerWhite: isPlayerWhite,
+        );
+      }
 
       final tip = _getTip(
         movingPiece?.type, to, movesPlayed, isCapture, isCheck, isCheckmate);
