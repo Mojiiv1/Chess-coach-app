@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:chess/chess.dart' as ch;
 import '../utils/error_handler.dart';
+import 'stockfish_service.dart';
 
 /// Piece values in centipawns.
 const Map<String, int> _pieceValues = {
@@ -110,18 +111,27 @@ class AIService {
   static final _rng = Random();
 
   /// Main entry point. Returns (uciMove, evalCentipawns).
-  /// Never returns an empty move when legal moves exist — falls back to random.
-  static (String move, int eval) getAIMove(
+  /// Tries Stockfish first at the appropriate skill/time setting for the
+  /// difficulty, then falls back to the homemade AI if Stockfish is
+  /// unavailable (engine not yet ready, or non-web platform).
+  static Future<(String move, int eval)> getAIMove(
     String fen,
     String difficulty,
     List<String> uciHistory,
-  ) {
+  ) async {
     try {
       if (!validateFen(fen)) {
         logWarning('AIService: invalid FEN');
         return _randomMove(fen);
       }
 
+      // ── Stockfish path ────────────────────────────────────────────────────
+      final sfMove = await _stockfishMove(fen, difficulty);
+      if (sfMove != null && sfMove.isNotEmpty) {
+        return (sfMove, 0);
+      }
+
+      // ── Homemade AI fallback (Stockfish unavailable) ──────────────────────
       final (move, eval) = switch (difficulty) {
         'beginner' => _beginnerMove(fen),
         'easy' => _greedyMove(fen),
@@ -130,7 +140,6 @@ class AIService {
         _ => _randomMove(fen),
       };
 
-      // Guaranteed fallback: if search returned empty for any reason, use random
       if (move.isEmpty) {
         logWarning('AIService: empty move from $difficulty — falling back to random');
         return _randomMove(fen);
@@ -138,8 +147,29 @@ class AIService {
       return (move, eval);
     } catch (e) {
       handleError(e, context: 'getAIMove');
-      // Last-resort fallback — never return empty
       return _randomMove(fen);
+    }
+  }
+
+  /// Asks Stockfish for the best move at the skill/time settings for this
+  /// difficulty. Returns null if Stockfish is not available.
+  static Future<String?> _stockfishMove(
+      String fen, String difficulty) async {
+    try {
+      final sf = StockfishService.instance;
+      return switch (difficulty) {
+        'beginner' => await sf.getBestMoveForOpponent(
+            fen: fen, skillLevel: 1, depthOrTimeMs: 100, useMovetime: true),
+        'easy' => await sf.getBestMoveForOpponent(
+            fen: fen, skillLevel: 5, depthOrTimeMs: 200, useMovetime: true),
+        'intermediate' => await sf.getBestMoveForOpponent(
+            fen: fen, skillLevel: 10, depthOrTimeMs: 8),
+        'advanced' => await sf.getBestMoveForOpponent(
+            fen: fen, skillLevel: 20, depthOrTimeMs: 12),
+        _ => null,
+      };
+    } catch (_) {
+      return null;
     }
   }
 

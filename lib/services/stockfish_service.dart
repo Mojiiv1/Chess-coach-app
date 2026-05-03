@@ -136,10 +136,48 @@ class StockfishService {
     _pending?.complete(null); // cancel any stale request
     _pending = Completer<StockfishResult?>();
     _latestScore = null;
+    // Always reset to full strength so coach analysis is not polluted by a
+    // prior low-skill AI search.
+    _worker!.postMessage('setoption name Skill Level value 20'.toJS);
     _worker!.postMessage('position fen $fen'.toJS);
     _worker!.postMessage('go depth $depth'.toJS);
     try {
       return await _pending!.future.timeout(const Duration(seconds: 30));
+    } catch (_) {
+      _pending = null;
+      return null;
+    }
+  }
+
+  /// Returns the best move for the AI opponent at a given skill level.
+  ///
+  /// Set [useMovetime] to true to limit by time (ms) instead of depth — used
+  /// for lower skill levels so Stockfish doesn't over-think weak positions.
+  Future<String?> getBestMoveForOpponent({
+    required String fen,
+    required int skillLevel,
+    required int depthOrTimeMs,
+    bool useMovetime = false,
+  }) async {
+    if (_worker == null) return null;
+    try {
+      await _waitReady();
+    } catch (_) {
+      return null;
+    }
+    _pending?.complete(null); // cancel any stale request
+    _pending = Completer<StockfishResult?>();
+    _latestScore = null;
+    _worker!.postMessage('setoption name Skill Level value $skillLevel'.toJS);
+    _worker!.postMessage('position fen $fen'.toJS);
+    if (useMovetime) {
+      _worker!.postMessage('go movetime $depthOrTimeMs'.toJS);
+    } else {
+      _worker!.postMessage('go depth $depthOrTimeMs'.toJS);
+    }
+    try {
+      return (await _pending!.future.timeout(const Duration(seconds: 30)))
+          ?.bestMove;
     } catch (_) {
       _pending = null;
       return null;

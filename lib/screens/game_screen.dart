@@ -154,9 +154,8 @@ class _GameScreenState extends State<GameScreen> {
   Future<void> _executeAIMove() async {
     if (!mounted) return;
     try {
-      final (uciMove, _) = await Future(
-        () => AIService.getAIMove(_game.fen, _difficulty, _game.uciHistory),
-      );
+      final (uciMove, _) =
+          await AIService.getAIMove(_game.fen, _difficulty, _game.uciHistory);
       if (!mounted) return;
 
       // Brief pause so "Thinking…" is visible before the board updates.
