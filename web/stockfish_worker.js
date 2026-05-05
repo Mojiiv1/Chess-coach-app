@@ -1,11 +1,11 @@
-// Web Worker wrapper for stockfish-18-asm.js (nmrugg/stockfish.js v18, ASM.js build).
+// Web Worker wrapper for stockfish-18-lite-single.js (nmrugg/stockfish.js v18, single-threaded WASM build).
 // Loaded by StockfishService via: new Worker('stockfish_worker.js')
-// stockfish.js must live at the same path root (web/).
+// stockfish-18-lite-single.js and stockfish.wasm must live at the same path root (web/).
 
 // Web Workers don't have `window` — shim it to `self`.
 var window = self;
-// Some ASM.js builds probe document.currentScript.src to locate sibling files.
-var document = { currentScript: { src: 'stockfish.js' } };
+// Shim document.currentScript for build compatibility.
+var document = { currentScript: { src: 'stockfish-18-lite-single.js' } };
 
 // CommonJS shim so the module can assign module.exports.
 var exports = {};
@@ -13,7 +13,7 @@ var module = { exports: exports };
 
 self.postMessage('[worker] script start');
 
-importScripts('stockfish.js');
+importScripts('stockfish-18-lite-single.js');
 
 var StockfishExport = module.exports;
 var pendingCmds = [];
