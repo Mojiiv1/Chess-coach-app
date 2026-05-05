@@ -144,7 +144,7 @@ class CoachService {
 
   // ── Async analysis (Stockfish-backed) ────────────────────────────────────
 
-  /// Evaluates the move using Stockfish at depth 12.
+  /// Evaluates the move using Stockfish at depth 8.
   /// Falls back to [analyzeMove] if Stockfish is unavailable or times out.
   static Future<CoachFeedback> analyzeMoveAsync({
     required String beforeFen,
@@ -169,8 +169,8 @@ class CoachService {
       // Sequential calls — the service only supports one in-flight request;
       // concurrent calls would cancel the first via the pending-completer swap.
       final stockfish   = StockfishService.instance;
-      final resultBefore = await stockfish.evaluatePosition(beforeFen, depth: 12);
-      final resultAfter  = await stockfish.evaluatePosition(afterFen,  depth: 12);
+      final resultBefore = await stockfish.evaluatePosition(beforeFen, depth: 8);
+      final resultAfter  = await stockfish.evaluatePosition(afterFen,  depth: 8);
 
       if (resultBefore == null || resultAfter == null) {
         debugPrint('[CoachAsync] FALLBACK — Stockfish returned null '
