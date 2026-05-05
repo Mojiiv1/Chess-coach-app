@@ -238,9 +238,6 @@ class CoachService {
         }
       }
 
-      debugPrint('[CoachLoose] oppBest=$oppBestUci capValue=$capValue '
-          '→ loose=${loosePieceMessage != null}');
-
       final effectiveQuality =
           (quality.index >= MoveQuality.good.index &&
                   (valuableHangs.isNotEmpty || loosePieceMessage != null))
@@ -338,9 +335,6 @@ class CoachService {
     final capturedName = _pieceName(capturedPiece?.type);
     final prefix = _qualityPrefix(quality);
     final isBad = quality.index <= MoveQuality.inaccuracy.index;
-
-    debugPrint('[Coach] quality=$quality isBad=$isBad hangsAfter=${hangsAfter.length} '
-        'hangsBefore=${hangsBefore.length} piece=${movingPiece?.type} moves=$movesPlayed');
 
     // Always first: checkmate
     if (isCheckmate) {

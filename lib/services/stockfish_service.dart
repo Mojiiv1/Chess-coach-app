@@ -1,10 +1,9 @@
 // Stockfish engine service for Flutter web.
 //
 // Web-only. Requires two files in web/:
-//   web/stockfish.js        — stockfish-18-asm.js (nmrugg/stockfish.js v18)
-//                             Pure ASM.js build: no .wasm, no SharedArrayBuffer,
-//                             no CORS headers needed. ~10 MB, loads in a Worker.
-//   web/stockfish_worker.js — Worker bootstrap (ships with this project).
+//   web/stockfish-18-lite-single.js — nmrugg/stockfish.js v18, single-threaded WASM
+//   web/stockfish.wasm              — WASM binary (auto-fetched by the JS loader)
+//   web/stockfish_worker.js         — Worker bootstrap (ships with this project).
 //
 // Public API:
 //   evaluatePosition(fen)           → StockfishResult? (bestMove UCI + centipawns)
@@ -75,18 +74,7 @@ class StockfishService {
   }
 
   void _onLine(String line) {
-    // Worker diagnostics — always print so we can trace the bridge.
-    if (line.startsWith('[worker]')) {
-      debugPrint('[Stockfish] $line');
-      return;
-    }
-
-    // Log any line that carries key UCI tokens so we confirm engine output flows.
-    if (line.contains('uci') ||
-        line.contains('bestmove') ||
-        line.contains('readyok')) {
-      debugPrint('[Stockfish raw] $line');
-    }
+    if (line.startsWith('[worker]')) return;
 
     if (line == 'uciok') {
       _worker!.postMessage('isready'.toJS);

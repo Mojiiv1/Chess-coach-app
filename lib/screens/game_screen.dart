@@ -183,7 +183,6 @@ class _GameScreenState extends State<GameScreen> {
   // ── Save game ──────────────────────────────────────────────────────────────
 
   Future<void> _saveGame() async {
-    debugPrint('[SAVE] Save button tapped. fen=${_game.fen.substring(0, 20)}... moves=${_game.uciHistory.length}');
     final id = _savedGameId ??
         DateTime.now().millisecondsSinceEpoch.toString();
     _savedGameId = id;
@@ -201,7 +200,6 @@ class _GameScreenState extends State<GameScreen> {
         savedAt: DateTime.now(),
         isComplete: _game.isGameOver,
       ));
-      debugPrint('[SAVE] SaveGameService.saveGame completed without error');
     } catch (e, st) {
       debugPrint('[SAVE] ERROR in _saveGame: $e\n$st');
     }
@@ -311,12 +309,6 @@ class _GameScreenState extends State<GameScreen> {
     });
   }
 
-  void _changeDifficulty(String diff) {
-    if (diff == _difficulty) return;
-    setState(() => _difficulty = diff);
-    _resetGame();
-  }
-
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
@@ -350,9 +342,7 @@ class _GameScreenState extends State<GameScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            if (!isMulti)
-              _DifficultySelector(
-                  current: _difficulty, onSelect: _changeDifficulty),
+            if (!isMulti) _DifficultyLabel(difficulty: _difficulty),
             _PlayerBar(
               label: isMulti ? 'Player 2 (Black)' : 'AI (Black)',
               isActive: _game.turn == 'black' && !_game.isGameOver,
@@ -365,7 +355,7 @@ class _GameScreenState extends State<GameScreen> {
                 child: ChessBoard(
                   fen: _game.fen,
                   selectedSquares: selected,
-                  validMoveSquares: _validMoves,
+                  validMoveSquares: SettingsService.moveHintsEnabled ? _validMoves : {},
                   onSquareTap: _onSquareTapped,
                 ),
               ),
@@ -394,57 +384,40 @@ class _GameScreenState extends State<GameScreen> {
 // Sub-widgets
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _DifficultySelector extends StatelessWidget {
-  final String current;
-  final void Function(String) onSelect;
+class _DifficultyLabel extends StatelessWidget {
+  final String difficulty;
+  const _DifficultyLabel({required this.difficulty});
 
-  const _DifficultySelector({required this.current, required this.onSelect});
-
-  static const _levels = [
-    ('beginner', 'Beginner', Color(0xFF66BB6A)),
-    ('easy', 'Easy', Color(0xFF4FC3F7)),
-    ('intermediate', 'Intermediate', Color(0xFFFFA726)),
-    ('advanced', 'Advanced', Color(0xFFEF5350)),
-  ];
+  static const _colors = {
+    'beginner':     Color(0xFF66BB6A),
+    'easy':         Color(0xFF4FC3F7),
+    'intermediate': Color(0xFFFFA726),
+    'advanced':     Color(0xFFEF5350),
+  };
 
   @override
   Widget build(BuildContext context) {
+    final color = _colors[difficulty] ?? Colors.white54;
+    final label = difficulty[0].toUpperCase() + difficulty.substring(1);
     return Container(
-      height: 40,
+      height: 36,
       color: kSurface,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      child: Row(
-        children: _levels.map((level) {
-          final (id, label, color) = level;
-          final isSelected = id == current;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => onSelect(id),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                decoration: BoxDecoration(
-                  color: isSelected ? color.withAlpha(200) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: isSelected ? color : color.withAlpha(80),
-                    width: 1,
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : color,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
+      alignment: Alignment.center,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withAlpha(40),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withAlpha(120), width: 1),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }

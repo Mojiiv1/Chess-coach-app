@@ -184,21 +184,43 @@ class _HomeScreenState extends State<HomeScreen>
                 ],
               ),
               const SizedBox(height: 18),
-              IntrinsicHeight(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _StatItem('Wins', '${_stats.wins}', kGoodMove),
-                    _StatDivider(),
-                    _StatItem('Losses', '${_stats.losses}', kBadMove),
-                    _StatDivider(),
-                    _StatItem('Draws', '${_stats.draws}', Colors.white54),
-                    _StatDivider(),
-                    _StatItem(
-                        'Win %', '${_stats.winRatePercentage}%', kPrimaryAccent),
-                  ],
+              if (_stats.wins + _stats.losses + _stats.draws == 0)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Play your first game!',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Tap "Play vs AI" to get started.',
+                        style: TextStyle(color: Colors.white38, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                IntrinsicHeight(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _StatItem('Wins', '${_stats.wins}', kGoodMove),
+                      _StatDivider(),
+                      _StatItem('Losses', '${_stats.losses}', kBadMove),
+                      _StatDivider(),
+                      _StatItem('Draws', '${_stats.draws}', Colors.white54),
+                      _StatDivider(),
+                      _StatItem(
+                          'Win %', '${_stats.winRatePercentage}%', kPrimaryAccent),
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -335,15 +357,14 @@ class _HomeScreenState extends State<HomeScreen>
               const SizedBox(height: 24),
               _SettingItem(
                 label: 'Sound Effects',
+                subtitle: 'Coming soon',
                 initialValue: SettingsService.soundEffectsEnabled,
-                // TODO: wire to feature in next commit
                 onChanged: (val) { SettingsService.setSoundEffectsEnabled(val); },
               ),
               const SizedBox(height: 4),
               _SettingItem(
                 label: 'Move Hints',
                 initialValue: SettingsService.moveHintsEnabled,
-                // TODO: wire to feature in next commit
                 onChanged: (val) { SettingsService.setMoveHintsEnabled(val); },
               ),
               const SizedBox(height: 4),
@@ -525,10 +546,12 @@ class _FooterButton extends StatelessWidget {
 
 class _SettingItem extends StatefulWidget {
   final String label;
+  final String? subtitle;
   final bool initialValue;
   final ValueChanged<bool>? onChanged;
   const _SettingItem({
     required this.label,
+    this.subtitle,
     required this.initialValue,
     this.onChanged,
   });
@@ -551,8 +574,16 @@ class _SettingItemState extends State<_SettingItem> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(widget.label,
-            style: const TextStyle(color: Colors.white70, fontSize: 15)),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.label,
+                style: const TextStyle(color: Colors.white70, fontSize: 15)),
+            if (widget.subtitle != null)
+              Text(widget.subtitle!,
+                  style: const TextStyle(color: Colors.white38, fontSize: 11)),
+          ],
+        ),
         Switch(
           value: _value,
           onChanged: (val) {
