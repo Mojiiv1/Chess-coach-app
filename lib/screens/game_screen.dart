@@ -315,6 +315,7 @@ class _GameScreenState extends State<GameScreen> {
   Widget build(BuildContext context) {
     final selected = _selectedSquare != null ? {_selectedSquare!} : <String>{};
     final isMulti = widget.gameMode == GameMode.localMultiplayer;
+    final hintSquares = SettingsService.moveHintsEnabled ? _validMoves : <String>{};
 
     return Scaffold(
       backgroundColor: kBackground,
@@ -355,7 +356,7 @@ class _GameScreenState extends State<GameScreen> {
                 child: ChessBoard(
                   fen: _game.fen,
                   selectedSquares: selected,
-                  validMoveSquares: SettingsService.moveHintsEnabled ? _validMoves : {},
+                  validMoveSquares: hintSquares,
                   onSquareTap: _onSquareTapped,
                 ),
               ),
