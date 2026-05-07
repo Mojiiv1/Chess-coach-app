@@ -3,6 +3,7 @@ import '../models/saved_game.dart';
 import '../services/save_game_service.dart';
 import '../utils/constants.dart';
 import 'game_screen.dart';
+import 'review_screen.dart';
 
 class SavedGamesScreen extends StatefulWidget {
   const SavedGamesScreen({super.key});
@@ -27,6 +28,13 @@ class _SavedGamesScreenState extends State<SavedGamesScreen> {
   Future<void> _delete(String id) async {
     await SaveGameService.deleteGame(id);
     _load();
+  }
+
+  Future<void> _review(SavedGame game) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ReviewScreen(game: game)),
+    );
   }
 
   Future<void> _resume(SavedGame game) async {
@@ -164,6 +172,12 @@ class _SavedGamesScreenState extends State<SavedGamesScreen> {
                       onPressed: () => _resume(game),
                       tooltip: 'Resume',
                     ),
+                  IconButton(
+                    icon: const Icon(Icons.rate_review_outlined,
+                        color: Colors.white54),
+                    onPressed: () => _review(game),
+                    tooltip: 'Review this game',
+                  ),
                   IconButton(
                     icon: Icon(Icons.delete_outline,
                         color: kBadMove.withAlpha(180)),
