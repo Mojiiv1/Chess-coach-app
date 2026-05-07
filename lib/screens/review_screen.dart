@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:chess/chess.dart' as ch;
 import '../models/saved_game.dart';
+import '../services/coach_service.dart';
 import '../utils/constants.dart';
 import '../utils/error_handler.dart';
 import '../widgets/chess_board.dart';
@@ -21,6 +22,14 @@ class _ReviewScreenState extends State<ReviewScreen> {
   List<String> _fenList = [];
   List<String> _sanList = [];
 
+  // ── Coach analysis state ──────────────────────────────────────────────────
+  // Keyed by ply number. null value = analysis returned unavailable.
+  final Map<int, CoachFeedback?> _feedbackCache = {};
+  bool _analyzing = false;
+  // Incremented on every navigation; stale async results compare against this
+  // and discard themselves if the value has changed.
+  int _analysisGeneration = 0;
+
   final _listScroll = ScrollController();
 
   @override
@@ -35,7 +44,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
     super.dispose();
   }
 
-  // Precompute every FEN and SAN up-front so navigation is instant.
+  // ── Move data ─────────────────────────────────────────────────────────────
+
   void _buildMoveData() {
     final chess = ch.Chess();
     _fenList = [chess.fen];
@@ -67,17 +77,34 @@ class _ReviewScreenState extends State<ReviewScreen> {
     }
   }
 
+  // ── Human-ply detection ───────────────────────────────────────────────────
+  // Human color inference:
+  //   playerVsAI      → owner always plays White (odd plies: 1, 3, 5 …)
+  //   localMultiplayer → both sides are the user; analyze every ply
+  bool _isHumanPly(int ply) {
+    if (ply == 0) return false;
+    if (widget.game.gameMode == 'localMultiplayer') return true;
+    return ply % 2 == 1; // white moves on odd plies
+  }
+
+  // ── Navigation ────────────────────────────────────────────────────────────
+
   void _goToPly(int ply) {
     final clamped = ply.clamp(0, _fenList.length - 1);
-    setState(() => _currentPly = clamped);
+    // Increment generation so any in-flight analysis result knows it's stale.
+    ++_analysisGeneration;
+    setState(() {
+      _currentPly = clamped;
+      _analyzing = false; // reset; _startAnalysisIfNeeded sets it back if needed
+    });
     _scrollToChip(clamped);
+    _startAnalysisIfNeeded();
   }
 
   void _scrollToChip(int ply) {
     if (ply == 0) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_listScroll.hasClients) return;
-      // Approximate each chip at 72px wide (text + padding + margin).
       final target = ((ply - 1) * 72.0)
           .clamp(0.0, _listScroll.position.maxScrollExtent);
       _listScroll.animateTo(
@@ -87,6 +114,61 @@ class _ReviewScreenState extends State<ReviewScreen> {
       );
     });
   }
+
+  // ── Coach analysis ────────────────────────────────────────────────────────
+
+  Future<void> _startAnalysisIfNeeded() async {
+    final ply = _currentPly;
+
+    if (!_isHumanPly(ply)) return; // AI move or start position — skip
+    if (_feedbackCache.containsKey(ply)) return; // already cached
+
+    final generation = _analysisGeneration; // capture before first await
+
+    setState(() => _analyzing = true);
+
+    final uci = widget.game.uciHistory[ply - 1];
+    if (uci.length < 4) {
+      // Malformed UCI — store null and stop.
+      if (mounted && generation == _analysisGeneration) {
+        setState(() {
+          _feedbackCache[ply] = null;
+          _analyzing = false;
+        });
+      }
+      return;
+    }
+
+    final from = uci.substring(0, 2);
+    final to = uci.substring(2, 4);
+    // In localMultiplayer, white still plays odd plies.
+    final isPlayerWhite = widget.game.gameMode != 'localMultiplayer'
+        ? true         // playerVsAI: owner always plays White
+        : ply % 2 == 1; // localMultiplayer: both are human; track by ply
+
+    CoachFeedback? feedback;
+    try {
+      feedback = await CoachService.analyzeMoveAsync(
+        beforeFen: _fenList[ply - 1],
+        from: from,
+        to: to,
+        isPlayerWhite: isPlayerWhite,
+      );
+    } catch (e) {
+      handleError(e, context: 'ReviewScreen._startAnalysisIfNeeded');
+      // feedback stays null — panel shows "Analysis unavailable."
+    }
+
+    // Discard stale results (user navigated away while Stockfish was running).
+    if (!mounted || generation != _analysisGeneration) return;
+
+    setState(() {
+      _feedbackCache[ply] = feedback; // null means unavailable
+      _analyzing = false;
+    });
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -142,10 +224,63 @@ class _ReviewScreenState extends State<ReviewScreen> {
               scrollController: _listScroll,
               onTapPly: _goToPly,
             ),
+            _buildFeedbackPanel(),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildFeedbackPanel() {
+    final ply = _currentPly;
+
+    if (ply == 0) return const SizedBox.shrink();
+
+    if (!_isHumanPly(ply)) {
+      return _StatusPanel(
+        child: const Text(
+          'AI move — not analyzed.',
+          style: TextStyle(color: Colors.white38, fontSize: 12),
+        ),
+      );
+    }
+
+    if (_analyzing) {
+      return const _StatusPanel(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: Colors.white38,
+              ),
+            ),
+            SizedBox(width: 8),
+            Text(
+              'Analyzing…',
+              style: TextStyle(color: Colors.white38, fontSize: 12),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (!_feedbackCache.containsKey(ply)) return const SizedBox.shrink();
+
+    final feedback = _feedbackCache[ply];
+    if (feedback == null) {
+      return _StatusPanel(
+        child: const Text(
+          'Analysis unavailable.',
+          style: TextStyle(color: Colors.white38, fontSize: 12),
+        ),
+      );
+    }
+
+    return _ReviewCoachPanel(feedback: feedback);
   }
 
   AppBar _buildAppBar() => AppBar(
@@ -382,6 +517,149 @@ class _MoveListBar extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// Thin wrapper used for the "Analyzing…", "AI move", and "unavailable" states.
+class _StatusPanel extends StatelessWidget {
+  final Widget child;
+  const _StatusPanel({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: kSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Coach feedback panel for reviewed moves — mirrors _CoachPanel in
+/// game_screen.dart but lives here so the two screens stay independent.
+class _ReviewCoachPanel extends StatelessWidget {
+  final CoachFeedback feedback;
+  const _ReviewCoachPanel({required this.feedback});
+
+  static const _qualityMeta = {
+    MoveQuality.brilliant: (
+      bg: Color(0xFF0D3320),
+      border: Color(0xFF2E7D32),
+      icon: Icons.auto_awesome_rounded,
+      iconColor: Color(0xFFFFD700),
+    ),
+    MoveQuality.excellent: (
+      bg: Color(0xFF0D3320),
+      border: Color(0xFF2E7D32),
+      icon: Icons.star_rounded,
+      iconColor: Color(0xFF69F0AE),
+    ),
+    MoveQuality.good: (
+      bg: Color(0xFF0D1F3C),
+      border: Color(0xFF1565C0),
+      icon: Icons.thumb_up_rounded,
+      iconColor: Color(0xFF42A5F5),
+    ),
+    MoveQuality.inaccuracy: (
+      bg: Color(0xFF2A1E00),
+      border: Color(0xFFF57F17),
+      icon: Icons.info_rounded,
+      iconColor: Color(0xFFFFB74D),
+    ),
+    MoveQuality.mistake: (
+      bg: Color(0xFF2A0A00),
+      border: Color(0xFFB71C1C),
+      icon: Icons.warning_rounded,
+      iconColor: Color(0xFFEF5350),
+    ),
+    MoveQuality.blunder: (
+      bg: Color(0xFF2A0000),
+      border: Color(0xFFD50000),
+      icon: Icons.dangerous_rounded,
+      iconColor: Color(0xFFFF5252),
+    ),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final meta = _qualityMeta[feedback.quality]!;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: meta.bg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: meta.border, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(meta.icon, color: meta.iconColor, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                feedback.qualityLabel,
+                style: TextStyle(
+                  color: meta.iconColor,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            feedback.message,
+            style: const TextStyle(
+                color: Colors.white, fontSize: 12, height: 1.4),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (feedback.suggestion != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.lightbulb_outline_rounded,
+                    size: 13, color: Color(0xFFFFD700)),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    'Try instead: ${feedback.suggestion}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFFFFD700),
+                      fontStyle: FontStyle.italic,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (feedback.tip.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              feedback.tip,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.white.withAlpha(160),
+                fontStyle: FontStyle.italic,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
       ),
     );
   }
