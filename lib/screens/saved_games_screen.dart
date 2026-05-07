@@ -173,8 +173,8 @@ class _SavedGamesScreenState extends State<SavedGamesScreen> {
                       tooltip: 'Resume',
                     ),
                   IconButton(
-                    icon: const Icon(Icons.rate_review_outlined,
-                        color: Colors.white54),
+                    icon: const Icon(Icons.preview_rounded,
+                        color: kSecondaryAccent),
                     onPressed: () => _review(game),
                     tooltip: 'Review this game',
                   ),
