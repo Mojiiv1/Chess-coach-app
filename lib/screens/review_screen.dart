@@ -221,7 +221,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
             _MoveListBar(
               sanList: _sanList,
               currentPly: _currentPly,
+              feedbackCache: _feedbackCache,
               scrollController: _listScroll,
+              isHumanPly: _isHumanPly,
               onTapPly: _goToPly,
             ),
             _buildFeedbackPanel(),
@@ -449,15 +451,34 @@ class _NavBtn extends StatelessWidget {
 class _MoveListBar extends StatelessWidget {
   final List<String> sanList;
   final int currentPly;
+  final Map<int, CoachFeedback?> feedbackCache;
   final ScrollController scrollController;
+  final bool Function(int ply) isHumanPly;
   final void Function(int) onTapPly;
 
   const _MoveListBar({
     required this.sanList,
     required this.currentPly,
+    required this.feedbackCache,
     required this.scrollController,
+    required this.isHumanPly,
     required this.onTapPly,
   });
+
+  Color? _feedbackColor(int ply) {
+    if (!isHumanPly(ply)) return null;
+    final feedback = feedbackCache[ply];
+    if (feedback == null) return null;
+
+    return switch (feedback.quality) {
+      MoveQuality.brilliant => const Color(0xFFFFD54F),
+      MoveQuality.excellent => const Color(0xFF69F0AE),
+      MoveQuality.good => const Color(0xFF42A5F5),
+      MoveQuality.inaccuracy => const Color(0xFFFFB74D),
+      MoveQuality.mistake => const Color(0xFFEF6C00),
+      MoveQuality.blunder => const Color(0xFFFF5252),
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -475,6 +496,15 @@ class _MoveListBar extends StatelessWidget {
           final isWhite = i % 2 == 0;
           final isSelected = currentPly == ply;
           final moveNum = i ~/ 2 + 1;
+          final feedbackColor = _feedbackColor(ply);
+          final chipColor = feedbackColor == null
+              ? (isSelected
+                  ? kPrimaryAccent.withAlpha(60)
+                  : (isWhite ? Colors.white12 : Colors.black26))
+              : feedbackColor.withAlpha(isSelected ? 70 : 42);
+          final borderColor = isSelected
+              ? kPrimaryAccent
+              : feedbackColor?.withAlpha(150);
 
           return GestureDetector(
             onTap: () => onTapPly(ply),
@@ -483,13 +513,14 @@ class _MoveListBar extends StatelessWidget {
               padding:
                   const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: isSelected
-                    ? kPrimaryAccent.withAlpha(60)
-                    : (isWhite ? Colors.white12 : Colors.black26),
+                color: chipColor,
                 borderRadius: BorderRadius.circular(5),
-                border: isSelected
-                    ? Border.all(color: kPrimaryAccent, width: 1.5)
-                    : null,
+                border: borderColor == null
+                    ? null
+                    : Border.all(
+                        color: borderColor,
+                        width: isSelected ? 1.5 : 0.8,
+                      ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
