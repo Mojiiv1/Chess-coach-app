@@ -3,6 +3,7 @@ class SavedGame {
   final String fen;
   final String gameMode; // 'playerVsAI' | 'localMultiplayer'
   final String? difficulty;
+  final String? playerColor; // 'white' | 'black' for playerVsAI
   final List<String> uciHistory;
   final DateTime savedAt;
   final bool isComplete;
@@ -12,6 +13,7 @@ class SavedGame {
     required this.fen,
     required this.gameMode,
     this.difficulty,
+    this.playerColor,
     required this.uciHistory,
     required this.savedAt,
     required this.isComplete,
@@ -22,6 +24,7 @@ class SavedGame {
         'fen': fen,
         'gameMode': gameMode,
         'difficulty': difficulty,
+        'playerColor': playerColor,
         'uciHistory': uciHistory,
         'savedAt': savedAt.toIso8601String(),
         'isComplete': isComplete,
@@ -32,6 +35,7 @@ class SavedGame {
         fen: (map['fen'] ?? '').toString(),
         gameMode: (map['gameMode'] ?? 'playerVsAI').toString(),
         difficulty: map['difficulty']?.toString(),
+        playerColor: map['playerColor']?.toString(),
         uciHistory: _parseStringList(map['uciHistory']),
         savedAt: _parseDateTime(map['savedAt']),
         isComplete: map['isComplete'] == true,

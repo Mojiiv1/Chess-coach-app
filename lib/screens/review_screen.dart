@@ -82,13 +82,15 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   // ── Human-ply detection ───────────────────────────────────────────────────
   // Human color inference:
-  //   playerVsAI      → owner always plays White (odd plies: 1, 3, 5 …)
-  //   localMultiplayer → both sides are the user; analyze every ply
+  //   playerVsAI uses the saved player color.
+  //   localMultiplayer treats both sides as human and analyzes every ply.
   bool _isHumanPly(int ply) {
     if (ply == 0) return false;
     if (widget.game.gameMode == 'localMultiplayer') return true;
-    return ply % 2 == 1; // white moves on odd plies
+    return _playerIsWhite ? ply % 2 == 1 : ply % 2 == 0;
   }
+
+  bool get _playerIsWhite => widget.game.playerColor != 'black';
 
   List<int> get _humanPlies => [
         for (int ply = 1; ply < _fenList.length; ply++)
@@ -210,10 +212,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
     final from = uci.substring(0, 2);
     final to = uci.substring(2, 4);
-    // In localMultiplayer, white still plays odd plies.
     final isPlayerWhite = widget.game.gameMode != 'localMultiplayer'
-        ? true         // playerVsAI: owner always plays White
-        : ply % 2 == 1; // localMultiplayer: both are human; track by ply
+        ? _playerIsWhite
+        : ply % 2 == 1;
 
     CoachFeedback? feedback;
     try {
@@ -246,7 +247,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final from = uci.substring(0, 2);
     final to = uci.substring(2, 4);
     final isPlayerWhite = widget.game.gameMode != 'localMultiplayer'
-        ? true
+        ? _playerIsWhite
         : ply % 2 == 1;
 
     try {
@@ -329,6 +330,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   selectedSquares: const <String>{},
                   validMoveSquares: const <String>{},
                   onSquareTap: (_) {},
+                  flipped: widget.game.gameMode == 'playerVsAI' &&
+                      !_playerIsWhite,
                 ),
               ),
             ),

@@ -16,12 +16,14 @@ enum GameMode { playerVsAI, localMultiplayer }
 class GameScreen extends StatefulWidget {
   final GameMode gameMode;
   final String difficulty;
+  final String playerColor;
   final SavedGame? resumeFrom;
 
   const GameScreen({
     super.key,
     this.gameMode = GameMode.playerVsAI,
     this.difficulty = 'intermediate',
+    this.playerColor = 'white',
     this.resumeFrom,
   });
 
@@ -36,6 +38,7 @@ class _GameScreenState extends State<GameScreen> {
   Set<String> _validMoves = {};
 
   late String _difficulty;
+  late String _playerColor;
   String? _savedGameId;
   CoachFeedback? _lastFeedback;
   bool _coachAnalyzing = false;
@@ -49,13 +52,18 @@ class _GameScreenState extends State<GameScreen> {
   void initState() {
     super.initState();
     _difficulty = widget.difficulty;
+    _playerColor = _normalizePlayerColor(widget.playerColor);
     if (widget.resumeFrom != null) {
       final saved = widget.resumeFrom!;
       _game.loadFromFen(saved.fen, saved.uciHistory);
       _difficulty = saved.difficulty ?? widget.difficulty;
+      _playerColor = _normalizePlayerColor(saved.playerColor);
       _savedGameId = saved.id;
       _gameOverShown = saved.isComplete;
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scheduleAIMoveIfNeeded();
+    });
   }
 
   @override
@@ -64,11 +72,21 @@ class _GameScreenState extends State<GameScreen> {
     super.dispose();
   }
 
+  String _normalizePlayerColor(String? value) =>
+      value == 'black' ? 'black' : 'white';
+
+  bool get _isMultiplayer => widget.gameMode == GameMode.localMultiplayer;
+  bool get _isPlayerWhite => _playerColor != 'black';
+  String get _playerTurn => _isPlayerWhite ? 'white' : 'black';
+  String get _aiTurn => _isPlayerWhite ? 'black' : 'white';
+  bool get _isAITurn =>
+      !_isMultiplayer && !_game.isGameOver && _game.turn == _aiTurn;
+
   // ── Square tapping ─────────────────────────────────────────────────────────
 
   void _onSquareTapped(String square) {
     if (_aiThinking || _game.isGameOver) return;
-    if (widget.gameMode == GameMode.playerVsAI && _game.turn != 'white') return;
+    if (!_isMultiplayer && _game.turn != _playerTurn) return;
 
     if (_selectedSquare == null) {
       final moves = _game.getLegalMoves(square);
@@ -111,20 +129,23 @@ class _GameScreenState extends State<GameScreen> {
     setState(() {
       _evalBar = newEval;
       _lastFeedback = null;
-      _coachAnalyzing =
-          widget.gameMode != GameMode.localMultiplayer && coachEnabled;
+      _coachAnalyzing = !_isMultiplayer && coachEnabled;
     });
 
     _scrollHistoryToEnd();
 
     if (_game.isGameOver) {
+      if (_coachAnalyzing) {
+        setState(() => _coachAnalyzing = false);
+      }
       _handleGameOver();
+      return;
     }
 
-    if (widget.gameMode == GameMode.localMultiplayer) return;
+    if (_isMultiplayer) return;
 
     // Start the AI timer now — it runs concurrently with Stockfish analysis.
-    _scheduleAIMove();
+    _scheduleAIMoveIfNeeded();
 
     if (!coachEnabled) return; // skip Stockfish analysis; panel stays hidden
 
@@ -132,7 +153,7 @@ class _GameScreenState extends State<GameScreen> {
       beforeFen: beforeFen,
       from: from,
       to: to,
-      isPlayerWhite: true,
+      isPlayerWhite: _isPlayerWhite,
     );
 
     if (mounted) {
@@ -151,8 +172,17 @@ class _GameScreenState extends State<GameScreen> {
     });
   }
 
+  void _scheduleAIMoveIfNeeded() {
+    if (!_isAITurn || _aiThinking) return;
+    _scheduleAIMove();
+  }
+
   Future<void> _executeAIMove() async {
     if (!mounted) return;
+    if (!_isAITurn) {
+      setState(() => _aiThinking = false);
+      return;
+    }
     try {
       final (uciMove, _) =
           await AIService.getAIMove(_game.fen, _difficulty, _game.uciHistory);
@@ -196,6 +226,8 @@ class _GameScreenState extends State<GameScreen> {
             : 'localMultiplayer',
         difficulty:
             widget.gameMode == GameMode.playerVsAI ? _difficulty : null,
+        playerColor:
+            widget.gameMode == GameMode.playerVsAI ? _playerColor : null,
         uciHistory: List<String>.from(_game.uciHistory),
         savedAt: DateTime.now(),
         isComplete: _game.isGameOver,
@@ -233,16 +265,19 @@ class _GameScreenState extends State<GameScreen> {
       title = 'Checkmate!';
 
       if (widget.gameMode == GameMode.playerVsAI) {
-        if (blackWon) {
-          subtitle = 'The AI wins this time. Keep practicing!';
-          icon = Icons.sentiment_dissatisfied;
-          iconColor = kBadMove;
-          Future<void>(() => StatsService.recordLoss());
-        } else {
+        final winningColor = blackWon ? 'black' : 'white';
+        final playerWon = winningColor == _playerColor;
+
+        if (playerWon) {
           subtitle = 'You won! Excellent play!';
           icon = Icons.emoji_events;
           iconColor = const Color(0xFFFFD700);
           Future<void>(() => StatsService.recordWin());
+        } else {
+          subtitle = 'The AI wins this time. Keep practicing!';
+          icon = Icons.sentiment_dissatisfied;
+          iconColor = kBadMove;
+          Future<void>(() => StatsService.recordLoss());
         }
       } else {
         subtitle = blackWon
@@ -295,6 +330,9 @@ class _GameScreenState extends State<GameScreen> {
       _evalBar = 0;
       _savedGameId = null;
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scheduleAIMoveIfNeeded();
+    });
   }
 
   void _scrollHistoryToEnd() {
@@ -314,8 +352,17 @@ class _GameScreenState extends State<GameScreen> {
   @override
   Widget build(BuildContext context) {
     final selected = _selectedSquare != null ? {_selectedSquare!} : <String>{};
-    final isMulti = widget.gameMode == GameMode.localMultiplayer;
-    final hintSquares = SettingsService.moveHintsEnabled ? _validMoves : <String>{};
+    final isMulti = _isMultiplayer;
+    final hintSquares =
+        SettingsService.moveHintsEnabled ? _validMoves : <String>{};
+    final topLabel = isMulti
+        ? 'Player 2 (Black)'
+        : (_isPlayerWhite ? 'AI (Black)' : 'AI (White)');
+    final bottomLabel = isMulti
+        ? 'Player 1 (White)'
+        : (_isPlayerWhite ? 'You (White)' : 'You (Black)');
+    final topActiveTurn = isMulti ? 'black' : _aiTurn;
+    final bottomActiveTurn = isMulti ? 'white' : _playerTurn;
 
     return Scaffold(
       backgroundColor: kBackground,
@@ -345,8 +392,8 @@ class _GameScreenState extends State<GameScreen> {
           children: [
             if (!isMulti) _DifficultyLabel(difficulty: _difficulty),
             _PlayerBar(
-              label: isMulti ? 'Player 2 (Black)' : 'AI (Black)',
-              isActive: _game.turn == 'black' && !_game.isGameOver,
+              label: topLabel,
+              isActive: _game.turn == topActiveTurn && !_game.isGameOver,
               isThinking: _aiThinking && !isMulti,
             ),
             _EvalBar(centipawns: _evalBar),
@@ -358,12 +405,13 @@ class _GameScreenState extends State<GameScreen> {
                   selectedSquares: selected,
                   validMoveSquares: hintSquares,
                   onSquareTap: _onSquareTapped,
+                  flipped: !isMulti && !_isPlayerWhite,
                 ),
               ),
             ),
             _PlayerBar(
-              label: isMulti ? 'Player 1 (White)' : 'You (White)',
-              isActive: _game.turn == 'white' && !_game.isGameOver,
+              label: bottomLabel,
+              isActive: _game.turn == bottomActiveTurn && !_game.isGameOver,
               isThinking: false,
             ),
             if (!isMulti && (_coachAnalyzing || _lastFeedback != null))

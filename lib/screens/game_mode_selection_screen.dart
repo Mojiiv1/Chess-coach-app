@@ -14,6 +14,7 @@ class GameModeSelectionScreen extends StatefulWidget {
 
 class _GameModeSelectionScreenState extends State<GameModeSelectionScreen> {
   String _difficulty = 'intermediate';
+  String _playerColor = 'white';
 
   static const _difficulties = [
     (
@@ -53,6 +54,7 @@ class _GameModeSelectionScreenState extends State<GameModeSelectionScreen> {
         builder: (_) => GameScreen(
           gameMode: widget.gameMode,
           difficulty: _difficulty,
+          playerColor: _playerColor,
         ),
       ),
     );
@@ -83,6 +85,8 @@ class _GameModeSelectionScreenState extends State<GameModeSelectionScreen> {
                     children: [
                       if (isAI) ...[
                         _buildDifficultySection(),
+                        const SizedBox(height: 32),
+                        _buildSideSection(),
                         const SizedBox(height: 32),
                       ] else ...[
                         _buildMultiplayerInfo(),
@@ -151,6 +155,42 @@ class _GameModeSelectionScreenState extends State<GameModeSelectionScreen> {
             isSelected: _difficulty == d.id,
             onTap: () => setState(() => _difficulty = d.id),
           ),
+      ],
+    );
+  }
+
+  Widget _buildSideSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Choose Side',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Pick which color you want to play',
+          style: TextStyle(color: Colors.white.withAlpha(140), fontSize: 14),
+        ),
+        const SizedBox(height: 20),
+        _SideCard(
+          label: 'Play as White',
+          desc: 'You move first',
+          icon: Icons.circle_outlined,
+          isSelected: _playerColor == 'white',
+          onTap: () => setState(() => _playerColor = 'white'),
+        ),
+        _SideCard(
+          label: 'Play as Black',
+          desc: 'AI moves first',
+          icon: Icons.circle,
+          isSelected: _playerColor == 'black',
+          onTap: () => setState(() => _playerColor = 'black'),
+        ),
       ],
     );
   }
@@ -325,6 +365,78 @@ class _DifficultyCard extends StatelessWidget {
             ),
             if (isSelected)
               Icon(Icons.check_circle_rounded, color: color, size: 22),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SideCard extends StatelessWidget {
+  final String label;
+  final String desc;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _SideCard({
+    required this.label,
+    required this.desc,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isSelected ? kSecondaryAccent : Colors.white54;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? kSecondaryAccent.withAlpha(35)
+              : Colors.white.withAlpha(10),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? kSecondaryAccent : Colors.white.withAlpha(30),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : Colors.white70,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    desc,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white60 : Colors.white38,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              const Icon(Icons.check_circle_rounded,
+                  color: kSecondaryAccent, size: 22),
           ],
         ),
       ),
