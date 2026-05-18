@@ -12,6 +12,10 @@ class CoachFeedback {
   final String? suggestion; // Better move in SAN, only for bad moves
   final String tip;         // Contextual principle tip
   final List<String> tactics; // e.g. ["Check", "Pin", "Capture"]
+  final String? whatHappened;
+  final String? whyItMatters;
+  final String? betterIdea;
+  final String? tryInstead;
 
   const CoachFeedback({
     required this.quality,
@@ -20,6 +24,10 @@ class CoachFeedback {
     this.suggestion,
     this.tip = '',
     this.tactics = const [],
+    this.whatHappened,
+    this.whyItMatters,
+    this.betterIdea,
+    this.tryInstead,
   });
 
   String get qualityLabel {
@@ -79,6 +87,16 @@ class CoachService {
       final hangsBefore = _detectMissedCaptures(gameBefore, isPlayerWhite);
 
       final quality = _classifyDelta(delta, isCheckmate);
+      final suggestion = delta < -30
+          ? _findSuggestion(beforeFen, from, to, isPlayerWhite)
+          : null;
+      final explanation = hangsAfter.isNotEmpty
+          ? _buildLoosePieceExplanation(
+              pieceName: _pieceName(gameAfter.get(hangsAfter.first)?.type),
+              square: hangsAfter.first,
+              suggestion: suggestion,
+            )
+          : null;
 
       final message = _buildMessage(
         quality: quality,
@@ -97,10 +115,6 @@ class CoachService {
         delta: delta,
         isPlayerWhite: isPlayerWhite,
       );
-
-      final suggestion = delta < -30
-          ? _findSuggestion(beforeFen, from, to, isPlayerWhite)
-          : null;
 
       final tip = _getTip(
         movingPiece?.type,
@@ -130,6 +144,10 @@ class CoachService {
         suggestion: suggestion,
         tip: tip,
         tactics: tactics,
+        whatHappened: explanation?.whatHappened,
+        whyItMatters: explanation?.whyItMatters,
+        betterIdea: explanation?.betterIdea,
+        tryInstead: explanation?.tryInstead,
       );
     } catch (e) {
       handleError(e, context: 'analyzeMove');
@@ -217,6 +235,12 @@ class CoachService {
       // one of our valuable pieces. Only checked when nothing is already
       // immediately hanging, to avoid double-counting the same piece.
       String? loosePieceMessage;
+      ({
+        String whatHappened,
+        String whyItMatters,
+        String betterIdea,
+        String tryInstead,
+      })? loosePieceExplanation;
       final oppBestUci = resultAfter.bestMove;
       int capValue = 0;
       if (valuableHangs.isEmpty && oppBestUci.length >= 4) {
@@ -230,6 +254,12 @@ class CoachService {
             loosePieceMessage =
                 'Inaccuracy. Watch out — your ${_pieceName(targetPiece.type)} '
                 'on $oppTo is vulnerable. Opponent can play $oppBestSan next.';
+            loosePieceExplanation = _buildLoosePieceExplanation(
+              pieceName: _pieceName(targetPiece.type),
+              square: oppTo,
+              suggestion: suggestion,
+              opponentIdea: oppBestSan,
+            );
           }
         }
       }
@@ -263,6 +293,15 @@ class CoachService {
         );
       }
 
+      final hangingExplanation = valuableHangs.isNotEmpty
+          ? _buildLoosePieceExplanation(
+              pieceName: _pieceName(gameAfter.get(valuableHangs.first)?.type),
+              square: valuableHangs.first,
+              suggestion: suggestion,
+            )
+          : null;
+      final explanation = loosePieceExplanation ?? hangingExplanation;
+
       final tip = _getTip(
         movingPiece?.type, to, movesPlayed, isCapture, isCheck, isCheckmate);
 
@@ -285,6 +324,10 @@ class CoachService {
         suggestion: suggestion,
         tip: tip,
         tactics: tactics,
+        whatHappened: explanation?.whatHappened,
+        whyItMatters: explanation?.whyItMatters,
+        betterIdea: explanation?.betterIdea,
+        tryInstead: explanation?.tryInstead,
       );
     } catch (e) {
       handleError(e, context: 'analyzeMoveAsync');
@@ -727,6 +770,37 @@ class CoachService {
     if (type == ch.PieceType.QUEEN) return 900;
     if (type == ch.PieceType.KING) return 20000;
     return 0;
+  }
+
+  static ({
+    String whatHappened,
+    String whyItMatters,
+    String betterIdea,
+    String tryInstead,
+  }) _buildLoosePieceExplanation({
+    required String pieceName,
+    required String square,
+    String? suggestion,
+    String? opponentIdea,
+  }) {
+    final article = _articleFor(pieceName);
+    final tryText = suggestion != null
+        ? 'Try $suggestion instead.'
+        : 'Look for a move that defends the $pieceName or moves it to safety.';
+
+    return (
+      whatHappened: 'Your $pieceName on $square is now loose.',
+      whyItMatters: opponentIdea != null
+          ? 'Your opponent can play $opponentIdea and win $article $pieceName.'
+          : 'Your opponent can capture it and win material.',
+      betterIdea: 'Before moving, check whether your pieces are defended.',
+      tryInstead: tryText,
+    );
+  }
+
+  static String _articleFor(String word) {
+    if (word.isEmpty) return 'a';
+    return 'aeiou'.contains(word[0].toLowerCase()) ? 'an' : 'a';
   }
 
   static String _pieceName(ch.PieceType? type) {

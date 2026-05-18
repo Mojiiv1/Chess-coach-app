@@ -992,6 +992,25 @@ class _ReviewCoachPanel extends StatelessWidget {
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
           ),
+          if (_hasStructuredExplanation(feedback)) ...[
+            const SizedBox(height: 8),
+            _ExplanationLine(
+              label: 'What happened',
+              text: feedback.whatHappened,
+            ),
+            _ExplanationLine(
+              label: 'Why it matters',
+              text: feedback.whyItMatters,
+            ),
+            _ExplanationLine(
+              label: 'Better idea',
+              text: feedback.betterIdea,
+            ),
+            _ExplanationLine(
+              label: 'Try instead',
+              text: feedback.tryInstead,
+            ),
+          ],
           if (feedback.suggestion != null) ...[
             const SizedBox(height: 6),
             Row(
@@ -1027,6 +1046,50 @@ class _ReviewCoachPanel extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  bool _hasStructuredExplanation(CoachFeedback feedback) =>
+      feedback.whatHappened != null ||
+      feedback.whyItMatters != null ||
+      feedback.betterIdea != null ||
+      feedback.tryInstead != null;
+}
+
+class _ExplanationLine extends StatelessWidget {
+  final String label;
+  final String? text;
+
+  const _ExplanationLine({
+    required this.label,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (text == null || text!.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 11,
+            height: 1.3,
+          ),
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            TextSpan(text: text),
+          ],
+        ),
       ),
     );
   }
