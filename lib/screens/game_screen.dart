@@ -44,6 +44,7 @@ class _GameScreenState extends State<GameScreen> {
   bool _coachAnalyzing = false;
   bool _aiThinking = false;
   bool _gameOverShown = false;
+  bool? _boardFlippedOverride;
   int _evalBar = 0;
 
   final _historyScrollCtrl = ScrollController();
@@ -79,6 +80,8 @@ class _GameScreenState extends State<GameScreen> {
   bool get _isPlayerWhite => _playerColor != 'black';
   String get _playerTurn => _isPlayerWhite ? 'white' : 'black';
   String get _aiTurn => _isPlayerWhite ? 'black' : 'white';
+  bool get _defaultBoardFlipped => !_isMultiplayer && !_isPlayerWhite;
+  bool get _boardFlipped => _boardFlippedOverride ?? _defaultBoardFlipped;
   bool get _isAITurn =>
       !_isMultiplayer && !_game.isGameOver && _game.turn == _aiTurn;
 
@@ -175,6 +178,12 @@ class _GameScreenState extends State<GameScreen> {
   void _scheduleAIMoveIfNeeded() {
     if (!_isAITurn || _aiThinking) return;
     _scheduleAIMove();
+  }
+
+  void _toggleBoardOrientation() {
+    setState(() {
+      _boardFlippedOverride = !_boardFlipped;
+    });
   }
 
   Future<void> _executeAIMove() async {
@@ -327,6 +336,7 @@ class _GameScreenState extends State<GameScreen> {
       _coachAnalyzing = false;
       _aiThinking = false;
       _gameOverShown = false;
+      _boardFlippedOverride = null;
       _evalBar = 0;
       _savedGameId = null;
     });
@@ -374,6 +384,12 @@ class _GameScreenState extends State<GameScreen> {
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
         ),
         actions: [
+          if (!isMulti)
+            IconButton(
+              icon: const Icon(Icons.screen_rotation_alt_rounded),
+              onPressed: _toggleBoardOrientation,
+              tooltip: 'Flip board',
+            ),
           if (!_game.isGameOver)
             IconButton(
               icon: const Icon(Icons.save_outlined),
@@ -405,7 +421,7 @@ class _GameScreenState extends State<GameScreen> {
                   selectedSquares: selected,
                   validMoveSquares: hintSquares,
                   onSquareTap: _onSquareTapped,
-                  flipped: !isMulti && !_isPlayerWhite,
+                  flipped: _boardFlipped,
                 ),
               ),
             ),
