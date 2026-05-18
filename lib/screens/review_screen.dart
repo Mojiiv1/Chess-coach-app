@@ -111,6 +111,50 @@ class _ReviewScreenState extends State<ReviewScreen> {
     return counts;
   }
 
+  List<_CriticalMoment> get _criticalMoments {
+    final moments = <_CriticalMoment>[];
+
+    for (final ply in _humanPlies) {
+      final feedback = _feedbackCache[ply];
+      if (feedback == null || !_isCriticalQuality(feedback.quality)) {
+        continue;
+      }
+
+      moments.add(_CriticalMoment(
+        ply: ply,
+        san: _sanList[ply - 1],
+        quality: feedback.quality,
+        qualityLabel: feedback.qualityLabel,
+      ));
+    }
+
+    moments.sort((a, b) {
+      final qualityCompare =
+          _criticalRank(a.quality).compareTo(_criticalRank(b.quality));
+      if (qualityCompare != 0) return qualityCompare;
+      return a.ply.compareTo(b.ply);
+    });
+
+    return moments;
+  }
+
+  bool get _reviewAnalysisComplete =>
+      _humanPlies.isNotEmpty && _analyzedHumanCount >= _humanPlies.length;
+
+  bool _isCriticalQuality(MoveQuality quality) =>
+      quality == MoveQuality.blunder ||
+      quality == MoveQuality.mistake ||
+      quality == MoveQuality.inaccuracy;
+
+  int _criticalRank(MoveQuality quality) {
+    return switch (quality) {
+      MoveQuality.blunder => 0,
+      MoveQuality.mistake => 1,
+      MoveQuality.inaccuracy => 2,
+      _ => 3,
+    };
+  }
+
   // ── Navigation ────────────────────────────────────────────────────────────
 
   void _goToPly(int ply) {
@@ -312,6 +356,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   _analyzingAll ? _analysisTotalCount : _humanPlies.length,
               counts: _summaryCounts(),
               onAnalyzeGame: _analyzeGame,
+            ),
+            _CriticalMomentsPanel(
+              moments: _criticalMoments,
+              analysisComplete: _reviewAnalysisComplete,
+              onTapPly: _goToPly,
             ),
             _buildFeedbackPanel(),
           ],
@@ -728,6 +777,111 @@ class _SummaryCount extends StatelessWidget {
     return Text(
       '$label: $value',
       style: const TextStyle(color: Colors.white70, fontSize: 11),
+    );
+  }
+}
+
+/// Simple cached list of the worst analyzed human moves.
+class _CriticalMoment {
+  final int ply;
+  final String san;
+  final MoveQuality quality;
+  final String qualityLabel;
+
+  const _CriticalMoment({
+    required this.ply,
+    required this.san,
+    required this.quality,
+    required this.qualityLabel,
+  });
+}
+
+class _CriticalMomentsPanel extends StatelessWidget {
+  final List<_CriticalMoment> moments;
+  final bool analysisComplete;
+  final void Function(int ply) onTapPly;
+
+  const _CriticalMomentsPanel({
+    required this.moments,
+    required this.analysisComplete,
+    required this.onTapPly,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget content;
+    if (moments.isEmpty) {
+      content = Text(
+        analysisComplete
+            ? 'No major mistakes found.'
+            : 'Analyze game to find critical moments.',
+        style: const TextStyle(color: Colors.white54, fontSize: 12),
+      );
+    } else {
+      content = Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final moment in moments)
+            _CriticalMomentChip(
+              moment: moment,
+              onTap: () => onTapPly(moment.ply),
+            ),
+        ],
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      color: kSurface,
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Critical Moments',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          content,
+        ],
+      ),
+    );
+  }
+}
+
+class _CriticalMomentChip extends StatelessWidget {
+  final _CriticalMoment moment;
+  final VoidCallback onTap;
+
+  const _CriticalMomentChip({
+    required this.moment,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final moveNumber = (moment.ply + 1) ~/ 2;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(5),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.black26,
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(color: Colors.white12),
+        ),
+        child: Text(
+          '$moveNumber. ${moment.san} - ${moment.qualityLabel}',
+          style: const TextStyle(color: Colors.white70, fontSize: 11),
+        ),
+      ),
     );
   }
 }
