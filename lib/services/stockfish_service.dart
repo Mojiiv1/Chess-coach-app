@@ -81,7 +81,6 @@ class StockfishService {
     } else if (line == 'readyok') {
       _ready = true;
       if (!_readyCompleter.isCompleted) _readyCompleter.complete();
-      debugPrint('[Stockfish] Engine ready');
     } else if (line.startsWith('info') && line.contains('score cp')) {
       _latestScore = _parseScore(line);
     } else if (line.startsWith('bestmove')) {

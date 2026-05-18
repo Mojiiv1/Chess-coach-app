@@ -1,5 +1,4 @@
 import 'package:chess/chess.dart' as ch;
-import 'package:flutter/foundation.dart';
 import 'ai_service.dart';
 import 'stockfish_service.dart';
 import '../utils/error_handler.dart';
@@ -173,9 +172,6 @@ class CoachService {
       final resultAfter  = await stockfish.evaluatePosition(afterFen,  depth: 8);
 
       if (resultBefore == null || resultAfter == null) {
-        debugPrint('[CoachAsync] FALLBACK — Stockfish returned null '
-            '(resultBefore=${resultBefore?.evalCentipawns} '
-            'resultAfter=${resultAfter?.evalCentipawns})');
         return analyzeMove(
           beforeFen: beforeFen, from: from, to: to,
           isPlayerWhite: isPlayerWhite);

@@ -70,7 +70,6 @@ class GameService {
         isCapture: isCapture,
       );
       _history.add(move);
-      logDebug('Move made: $uci  FEN: ${_chess.fen}');
       return move;
     } catch (e) {
       handleError(e, context: 'makeMove $from$to');
