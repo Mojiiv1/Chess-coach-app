@@ -26,6 +26,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
   // Keyed by ply number. null value = analysis returned unavailable.
   final Map<int, CoachFeedback?> _feedbackCache = {};
   bool _analyzing = false;
+  bool _analyzingAll = false;
+  int _analysisDoneCount = 0;
+  int _analysisTotalCount = 0;
   // Incremented on every navigation; stale async results compare against this
   // and discard themselves if the value has changed.
   int _analysisGeneration = 0;
@@ -87,6 +90,27 @@ class _ReviewScreenState extends State<ReviewScreen> {
     return ply % 2 == 1; // white moves on odd plies
   }
 
+  List<int> get _humanPlies => [
+        for (int ply = 1; ply < _fenList.length; ply++)
+          if (_isHumanPly(ply)) ply,
+      ];
+
+  int get _analyzedHumanCount =>
+      _humanPlies.where(_feedbackCache.containsKey).length;
+
+  Map<MoveQuality, int> _summaryCounts() {
+    final counts = {
+      for (final quality in MoveQuality.values) quality: 0,
+    };
+
+    for (final ply in _humanPlies) {
+      final feedback = _feedbackCache[ply];
+      if (feedback == null) continue;
+      counts[feedback.quality] = counts[feedback.quality]! + 1;
+    }
+    return counts;
+  }
+
   // ── Navigation ────────────────────────────────────────────────────────────
 
   void _goToPly(int ply) {
@@ -122,6 +146,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
     if (!_isHumanPly(ply)) return; // AI move or start position — skip
     if (_feedbackCache.containsKey(ply)) return; // already cached
+    if (_analyzingAll) return; // full-game analysis will fill the cache
 
     final generation = _analysisGeneration; // capture before first await
 
@@ -169,6 +194,59 @@ class _ReviewScreenState extends State<ReviewScreen> {
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
+
+  Future<CoachFeedback?> _analyzePlyForFullReview(int ply) async {
+    final uci = widget.game.uciHistory[ply - 1];
+    if (uci.length < 4) return null;
+
+    final from = uci.substring(0, 2);
+    final to = uci.substring(2, 4);
+    final isPlayerWhite = widget.game.gameMode != 'localMultiplayer'
+        ? true
+        : ply % 2 == 1;
+
+    try {
+      return await CoachService.analyzeMoveAsync(
+        beforeFen: _fenList[ply - 1],
+        from: from,
+        to: to,
+        isPlayerWhite: isPlayerWhite,
+      );
+    } catch (e) {
+      handleError(e, context: 'ReviewScreen._analyzePlyForFullReview');
+      return null;
+    }
+  }
+
+  Future<void> _analyzeGame() async {
+    if (_analyzingAll || _analyzing) return;
+
+    final humanPlies = _humanPlies;
+    setState(() {
+      _analyzingAll = true;
+      _analysisTotalCount = humanPlies.length;
+      _analysisDoneCount = _analyzedHumanCount;
+    });
+
+    for (final ply in humanPlies) {
+      if (!mounted) return;
+      if (_feedbackCache.containsKey(ply)) continue;
+
+      final feedback = await _analyzePlyForFullReview(ply);
+      if (!mounted) return;
+
+      setState(() {
+        _feedbackCache[ply] = feedback;
+        _analysisDoneCount = _analyzedHumanCount;
+      });
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _analysisDoneCount = _analyzedHumanCount;
+      _analyzingAll = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -225,6 +303,15 @@ class _ReviewScreenState extends State<ReviewScreen> {
               scrollController: _listScroll,
               isHumanPly: _isHumanPly,
               onTapPly: _goToPly,
+            ),
+            _ReviewSummaryPanel(
+              analyzingAll: _analyzingAll,
+              analyzedCount:
+                  _analyzingAll ? _analysisDoneCount : _analyzedHumanCount,
+              totalCount:
+                  _analyzingAll ? _analysisTotalCount : _humanPlies.length,
+              counts: _summaryCounts(),
+              onAnalyzeGame: _analyzeGame,
             ),
             _buildFeedbackPanel(),
           ],
@@ -549,6 +636,98 @@ class _MoveListBar extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+/// Basic full-review progress and cached-feedback summary.
+class _ReviewSummaryPanel extends StatelessWidget {
+  final bool analyzingAll;
+  final int analyzedCount;
+  final int totalCount;
+  final Map<MoveQuality, int> counts;
+  final VoidCallback onAnalyzeGame;
+
+  const _ReviewSummaryPanel({
+    required this.analyzingAll,
+    required this.analyzedCount,
+    required this.totalCount,
+    required this.counts,
+    required this.onAnalyzeGame,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final complete = totalCount > 0 && analyzedCount >= totalCount;
+    final progressText = analyzingAll
+        ? 'Analyzing $analyzedCount / $totalCount...'
+        : complete
+            ? 'Summary complete'
+            : 'Analyze game to complete summary';
+
+    return Container(
+      width: double.infinity,
+      color: kSurface,
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  progressText,
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+              ),
+              TextButton(
+                onPressed:
+                    analyzingAll || totalCount == 0 ? null : onAnalyzeGame,
+                child: const Text('Analyze Game'),
+              ),
+            ],
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              _SummaryCount(
+                  label: 'Brilliant',
+                  value: counts[MoveQuality.brilliant] ?? 0),
+              _SummaryCount(
+                  label: 'Excellent',
+                  value: counts[MoveQuality.excellent] ?? 0),
+              _SummaryCount(
+                  label: 'Good', value: counts[MoveQuality.good] ?? 0),
+              _SummaryCount(
+                  label: 'Inaccuracy',
+                  value: counts[MoveQuality.inaccuracy] ?? 0),
+              _SummaryCount(
+                  label: 'Mistake',
+                  value: counts[MoveQuality.mistake] ?? 0),
+              _SummaryCount(
+                  label: 'Blunder',
+                  value: counts[MoveQuality.blunder] ?? 0),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryCount extends StatelessWidget {
+  final String label;
+  final int value;
+
+  const _SummaryCount({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      '$label: $value',
+      style: const TextStyle(color: Colors.white70, fontSize: 11),
     );
   }
 }
