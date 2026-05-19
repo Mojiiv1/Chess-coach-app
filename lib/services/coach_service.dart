@@ -138,23 +138,24 @@ class CoachService {
           samePieceExplanation ??
           earlyQueenExplanation;
 
-      final message = _buildMessage(
-        quality: quality,
-        gameBefore: gameBefore,
-        gameAfter: gameAfter,
-        from: from,
-        to: to,
-        isCapture: isCapture,
-        isCheck: isCheck,
-        isCheckmate: isCheckmate,
-        movesPlayed: movesPlayed,
-        hangsAfter: hangsAfter,
-        hangsBefore: hangsBefore,
-        forkTarget: forkTarget,
-        pinTarget: pinTarget,
-        delta: delta,
-        isPlayerWhite: isPlayerWhite,
-      );
+      final message = _messageForStructuredExplanation(explanation, quality) ??
+          _buildMessage(
+            quality: quality,
+            gameBefore: gameBefore,
+            gameAfter: gameAfter,
+            from: from,
+            to: to,
+            isCapture: isCapture,
+            isCheck: isCheck,
+            isCheckmate: isCheckmate,
+            movesPlayed: movesPlayed,
+            hangsAfter: hangsAfter,
+            hangsBefore: hangsBefore,
+            forkTarget: forkTarget,
+            pinTarget: pinTarget,
+            delta: delta,
+            isPlayerWhite: isPlayerWhite,
+          );
 
       final tip = _getTip(
         movingPiece?.type,
@@ -333,11 +334,11 @@ class CoachService {
         isCheckmate: isCheckmate,
       );
 
-      final String message;
+      final String baseMessage;
       if (loosePieceMessage != null && quality.index >= MoveQuality.good.index) {
-        message = loosePieceMessage;
+        baseMessage = loosePieceMessage;
       } else {
-        message = _buildMessage(
+        baseMessage = _buildMessage(
           quality: effectiveQuality,
           gameBefore: gameBefore,
           gameAfter: gameAfter,
@@ -381,6 +382,9 @@ class CoachService {
           missedFreeCaptureExplanation ??
           samePieceExplanation ??
           earlyQueenExplanation;
+      final message =
+          _messageForStructuredExplanation(explanation, effectiveQuality) ??
+              baseMessage;
 
       final tip = _getTip(
         movingPiece?.type, to, movesPlayed, isCapture, isCheck, isCheckmate);
@@ -991,6 +995,34 @@ class CoachService {
           'Before capturing, compare piece values and check if your piece will be safe.',
       tryInstead: tryText,
     );
+  }
+
+  static String? _messageForStructuredExplanation(
+    ({
+      String whatHappened,
+      String whyItMatters,
+      String betterIdea,
+      String tryInstead,
+    })? explanation,
+    MoveQuality quality,
+  ) {
+    if (explanation == null) return null;
+
+    final prefix = _qualityPrefix(quality);
+    final lead = prefix.isEmpty ? '' : '$prefix ';
+
+    switch (explanation.whatHappened) {
+      case 'You made a bad trade.':
+        return '${lead}You made a bad trade.';
+      case 'You missed a free capture.':
+        return '${lead}You missed a free capture.';
+      case 'You moved the same piece twice in the opening.':
+        return '${lead}You moved the same piece twice in the opening.';
+      case 'You brought your queen out early.':
+        return '${lead}You brought your queen out early.';
+      default:
+        return null;
+    }
   }
 
   static bool _isEarlyQueenMove(ch.Piece? piece, int movesPlayed) {

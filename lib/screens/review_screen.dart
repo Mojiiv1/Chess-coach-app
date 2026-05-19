@@ -113,6 +113,71 @@ class _ReviewScreenState extends State<ReviewScreen> {
     return counts;
   }
 
+  _LessonSummary _lessonSummary() {
+    final counts = <String, int>{};
+    final focusByType = <String, String>{};
+
+    for (final ply in _humanPlies) {
+      final feedback = _feedbackCache[ply];
+      if (feedback == null || !_isCriticalQuality(feedback.quality)) {
+        continue;
+      }
+
+      final type = _lessonTypeFor(feedback.whatHappened);
+      if (type == null) continue;
+
+      counts[type] = (counts[type] ?? 0) + 1;
+      final focus = feedback.betterIdea;
+      if (focus != null && focus.isNotEmpty) {
+        focusByType.putIfAbsent(type, () => focus);
+      }
+    }
+
+    if (counts.isEmpty) {
+      return const _LessonSummary(
+        mainLesson: 'No repeated mistake pattern found.',
+        topPatterns: [],
+        focus: 'Keep developing pieces and checking for threats.',
+      );
+    }
+
+    final topPatterns = counts.entries
+        .map((entry) => _LessonPattern(
+              label: entry.key,
+              count: entry.value,
+            ))
+        .toList()
+      ..sort((a, b) {
+        final countCompare = b.count.compareTo(a.count);
+        if (countCompare != 0) return countCompare;
+        return a.label.compareTo(b.label);
+      });
+
+    final mainLesson = topPatterns.first.label;
+    return _LessonSummary(
+      mainLesson: mainLesson,
+      topPatterns: topPatterns.take(3).toList(),
+      focus: focusByType[mainLesson] ??
+          'Keep developing pieces and checking for threats.',
+    );
+  }
+
+  String? _lessonTypeFor(String? whatHappened) {
+    if (whatHappened == null || whatHappened.isEmpty) return null;
+    if (whatHappened.contains('is now loose')) return 'Loose pieces';
+    if (whatHappened == 'You brought your queen out early.') {
+      return 'Early queen moves';
+    }
+    if (whatHappened == 'You moved the same piece twice in the opening.') {
+      return 'Repeated piece moves';
+    }
+    if (whatHappened == 'You missed a free capture.') {
+      return 'Missed free captures';
+    }
+    if (whatHappened == 'You made a bad trade.') return 'Bad trades';
+    return null;
+  }
+
   List<_CriticalMoment> get _criticalMoments {
     final moments = <_CriticalMoment>[];
 
@@ -360,6 +425,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
               counts: _summaryCounts(),
               onAnalyzeGame: _analyzeGame,
             ),
+            if (_reviewAnalysisComplete)
+              _ReviewLessonsPanel(summary: _lessonSummary()),
             _CriticalMomentsPanel(
               moments: _criticalMoments,
               analysisComplete: _reviewAnalysisComplete,
@@ -780,6 +847,106 @@ class _SummaryCount extends StatelessWidget {
     return Text(
       '$label: $value',
       style: const TextStyle(color: Colors.white70, fontSize: 11),
+    );
+  }
+}
+
+class _LessonSummary {
+  final String mainLesson;
+  final List<_LessonPattern> topPatterns;
+  final String focus;
+
+  const _LessonSummary({
+    required this.mainLesson,
+    required this.topPatterns,
+    required this.focus,
+  });
+}
+
+class _LessonPattern {
+  final String label;
+  final int count;
+
+  const _LessonPattern({
+    required this.label,
+    required this.count,
+  });
+}
+
+class _ReviewLessonsPanel extends StatelessWidget {
+  final _LessonSummary summary;
+
+  const _ReviewLessonsPanel({required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: kSurface,
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Lesson Summary',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          _LessonLine(label: 'Main lesson', text: summary.mainLesson),
+          if (summary.topPatterns.isNotEmpty) ...[
+            const SizedBox(height: 3),
+            Text(
+              'Top mistake patterns: ${summary.topPatterns.map((pattern) => '${pattern.label}: ${pattern.count}').join('  |  ')}',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 11,
+                height: 1.3,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          const SizedBox(height: 3),
+          _LessonLine(label: 'Focus next game', text: summary.focus),
+        ],
+      ),
+    );
+  }
+}
+
+class _LessonLine extends StatelessWidget {
+  final String label;
+  final String text;
+
+  const _LessonLine({
+    required this.label,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return RichText(
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(
+        style: const TextStyle(
+          color: Colors.white70,
+          fontSize: 11,
+          height: 1.3,
+        ),
+        children: [
+          TextSpan(
+            text: '$label: ',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          TextSpan(text: text),
+        ],
+      ),
     );
   }
 }
