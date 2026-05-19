@@ -713,7 +713,7 @@ class _CoachPanel extends StatelessWidget {
               fontSize: 12,
               height: 1.4,
             ),
-            maxLines: 3,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
 
@@ -725,12 +725,15 @@ class _CoachPanel extends StatelessWidget {
                 const Icon(Icons.lightbulb_outline_rounded,
                     size: 13, color: Color(0xFFFFD700)),
                 const SizedBox(width: 5),
-                Text(
-                  'Try instead: ${feedback.suggestion}',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFFFFD700),
-                    fontStyle: FontStyle.italic,
+                Flexible(
+                  child: Text(
+                    'Try: ${feedback.suggestion}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFFFFD700),
+                      fontStyle: FontStyle.italic,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -738,19 +741,6 @@ class _CoachPanel extends StatelessWidget {
           ],
 
           // ── Tip ───────────────────────────────────────────────────────
-          if (feedback.tip.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              feedback.tip,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.white.withAlpha(160),
-                fontStyle: FontStyle.italic,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
         ],
       ),
     );
