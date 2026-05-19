@@ -90,15 +90,28 @@ class CoachService {
       final suggestion = delta < -30
           ? _findSuggestion(beforeFen, from, to, isPlayerWhite)
           : null;
-      final explanation = hangsAfter.isNotEmpty
+      final samePieceMovedTwice = _isSamePieceMovedTwiceInOpening(
+        movingPiece,
+        from,
+        isPlayerWhite,
+        movesPlayed,
+      );
+      final hangingExplanation = hangsAfter.isNotEmpty
           ? _buildLoosePieceExplanation(
               pieceName: _pieceName(gameAfter.get(hangsAfter.first)?.type),
               square: hangsAfter.first,
               suggestion: suggestion,
             )
-          : _isEarlyQueenMove(movingPiece, movesPlayed)
-              ? _buildEarlyQueenMoveExplanation(suggestion: suggestion)
-              : null;
+          : null;
+      final samePieceExplanation = samePieceMovedTwice
+          ? _buildSamePieceMovedTwiceExplanation(suggestion: suggestion)
+          : null;
+      final earlyQueenExplanation = _isEarlyQueenMove(movingPiece, movesPlayed)
+          ? _buildEarlyQueenMoveExplanation(suggestion: suggestion)
+          : null;
+      final explanation = hangingExplanation ??
+          samePieceExplanation ??
+          earlyQueenExplanation;
 
       final message = _buildMessage(
         quality: quality,
@@ -271,6 +284,12 @@ class CoachService {
                   (valuableHangs.isNotEmpty || loosePieceMessage != null))
               ? MoveQuality.inaccuracy
               : quality;
+      final samePieceMovedTwice = _isSamePieceMovedTwiceInOpening(
+        movingPiece,
+        from,
+        isPlayerWhite,
+        movesPlayed,
+      );
 
       final String message;
       if (loosePieceMessage != null && quality.index >= MoveQuality.good.index) {
@@ -302,11 +321,16 @@ class CoachService {
               suggestion: suggestion,
             )
           : null;
+      final samePieceExplanation = samePieceMovedTwice
+          ? _buildSamePieceMovedTwiceExplanation(suggestion: suggestion)
+          : null;
       final earlyQueenExplanation = _isEarlyQueenMove(movingPiece, movesPlayed)
           ? _buildEarlyQueenMoveExplanation(suggestion: suggestion)
           : null;
-      final explanation =
-          loosePieceExplanation ?? hangingExplanation ?? earlyQueenExplanation;
+      final explanation = loosePieceExplanation ??
+          hangingExplanation ??
+          samePieceExplanation ??
+          earlyQueenExplanation;
 
       final tip = _getTip(
         movingPiece?.type, to, movesPlayed, isCapture, isCheck, isCheckmate);
@@ -422,23 +446,17 @@ class CoachService {
     // These fire for ALL quality levels — the simple evaluator can't detect
     // positional principles like early-queen or repeated-piece development.
 
-    // P2a: Queen out too early — fire even if eval says "good"
+    // P2a: Same non-pawn piece moved twice in the opening.
+    if (_isSamePieceMovedTwiceInOpening(
+        movingPiece, from, isPlayerWhite, movesPlayed)) {
+      final p2prefix = isBad ? '$prefix ' : '';
+      return '${p2prefix}You moved the same piece twice in the opening.';
+    }
+
+    // P2b: Queen out too early — fire even if eval says "good"
     if (movingPiece?.type == ch.PieceType.QUEEN && movesPlayed < 8) {
       final p2prefix = isBad ? '$prefix ' : '';
       return '${p2prefix}Your queen came out too early — opponents can chase it and gain time.';
-    }
-
-    // P2b: Same minor piece moved twice in the opening
-    if (isBad &&
-        movesPlayed < 12 &&
-        (movingPiece?.type == ch.PieceType.KNIGHT ||
-            movingPiece?.type == ch.PieceType.BISHOP)) {
-      final whiteStart = ['b1', 'g1', 'c1', 'f1'];
-      final blackStart = ['b8', 'g8', 'c8', 'f8'];
-      final startSquares = isPlayerWhite ? whiteStart : blackStart;
-      if (!startSquares.contains(from)) {
-        return '$prefix You moved the same piece twice in the opening, losing a tempo.';
-      }
     }
 
     // P2c: Kingside pawn pushed — weakens king shelter (only warn for bad moves)
@@ -806,6 +824,56 @@ class CoachService {
 
   static bool _isEarlyQueenMove(ch.Piece? piece, int movesPlayed) {
     return piece?.type == ch.PieceType.QUEEN && movesPlayed < 8;
+  }
+
+  static bool _isSamePieceMovedTwiceInOpening(
+    ch.Piece? piece,
+    String from,
+    bool isPlayerWhite,
+    int movesPlayed,
+  ) {
+    if (movesPlayed >= 10) return false;
+
+    final type = piece?.type;
+    if (type != ch.PieceType.KNIGHT &&
+        type != ch.PieceType.BISHOP &&
+        type != ch.PieceType.QUEEN) {
+      return false;
+    }
+
+    return !_startingSquaresFor(type, isPlayerWhite).contains(from);
+  }
+
+  static List<String> _startingSquaresFor(ch.PieceType? type, bool isWhite) {
+    if (type == ch.PieceType.KNIGHT) {
+      return isWhite ? const ['b1', 'g1'] : const ['b8', 'g8'];
+    }
+    if (type == ch.PieceType.BISHOP) {
+      return isWhite ? const ['c1', 'f1'] : const ['c8', 'f8'];
+    }
+    if (type == ch.PieceType.QUEEN) {
+      return isWhite ? const ['d1'] : const ['d8'];
+    }
+    return const [];
+  }
+
+  static ({
+    String whatHappened,
+    String whyItMatters,
+    String betterIdea,
+    String tryInstead,
+  }) _buildSamePieceMovedTwiceExplanation({String? suggestion}) {
+    final tryText = suggestion != null
+        ? 'Try $suggestion instead.'
+        : 'Look for a developing move with another piece.';
+
+    return (
+      whatHappened: 'You moved the same piece twice in the opening.',
+      whyItMatters: 'That gives your opponent time to develop more pieces.',
+      betterIdea:
+          'Develop a new knight or bishop before moving the same piece again.',
+      tryInstead: tryText,
+    );
   }
 
   static ({
