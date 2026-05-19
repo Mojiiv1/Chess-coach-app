@@ -381,62 +381,115 @@ class _ReviewScreenState extends State<ReviewScreen> {
       backgroundColor: kBackground,
       appBar: _buildAppBar(),
       body: SafeArea(
-        child: Column(
-          children: [
-            if (widget.game.gameMode == 'playerVsAI' &&
-                widget.game.difficulty != null)
-              _DifficultyPill(difficulty: widget.game.difficulty!),
-            _PlyLabel(currentPly: _currentPly, totalPlies: totalPlies),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                child: ChessBoard(
-                  fen: _fenList[_currentPly],
-                  selectedSquares: const <String>{},
-                  validMoveSquares: const <String>{},
-                  onSquareTap: (_) {},
-                  flipped: widget.game.gameMode == 'playerVsAI' &&
-                      !_playerIsWhite,
-                ),
-              ),
-            ),
-            _NavRow(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final boardSection = _buildBoardSection(
+              totalPlies: totalPlies,
               atStart: atStart,
               atEnd: atEnd,
-              onStart: () => _goToPly(0),
-              onPrev: () => _goToPly(_currentPly - 1),
-              onNext: () => _goToPly(_currentPly + 1),
-              onEnd: () => _goToPly(totalPlies),
-            ),
-            _MoveListBar(
-              sanList: _sanList,
-              currentPly: _currentPly,
-              feedbackCache: _feedbackCache,
-              scrollController: _listScroll,
-              isHumanPly: _isHumanPly,
-              onTapPly: _goToPly,
-            ),
-            _ReviewSummaryPanel(
-              analyzingAll: _analyzingAll,
-              analyzedCount:
-                  _analyzingAll ? _analysisDoneCount : _analyzedHumanCount,
-              totalCount:
-                  _analyzingAll ? _analysisTotalCount : _humanPlies.length,
-              counts: _summaryCounts(),
-              onAnalyzeGame: _analyzeGame,
-            ),
-            if (_reviewAnalysisComplete)
-              _ReviewLessonsPanel(summary: _lessonSummary()),
-            _CriticalMomentsPanel(
-              moments: _criticalMoments,
-              analysisComplete: _reviewAnalysisComplete,
-              onTapPly: _goToPly,
-            ),
-            _buildFeedbackPanel(),
-          ],
+            );
+            final learningSection = _buildLearningSection();
+            final isWide = constraints.maxWidth >= 820;
+
+            if (!isWide) {
+              return Column(
+                children: [
+                  ...boardSection,
+                  ...learningSection,
+                ],
+              );
+            }
+
+            return Padding(
+              padding: const EdgeInsets.all(8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: Column(children: boardSection),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 4,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: learningSection,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
+  }
+
+  List<Widget> _buildBoardSection({
+    required int totalPlies,
+    required bool atStart,
+    required bool atEnd,
+  }) {
+    return [
+      if (widget.game.gameMode == 'playerVsAI' &&
+          widget.game.difficulty != null)
+        _DifficultyPill(difficulty: widget.game.difficulty!),
+      _PlyLabel(currentPly: _currentPly, totalPlies: totalPlies),
+      Expanded(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: ChessBoard(
+            fen: _fenList[_currentPly],
+            selectedSquares: const <String>{},
+            validMoveSquares: const <String>{},
+            onSquareTap: (_) {},
+            flipped:
+                widget.game.gameMode == 'playerVsAI' && !_playerIsWhite,
+          ),
+        ),
+      ),
+      _NavRow(
+        atStart: atStart,
+        atEnd: atEnd,
+        onStart: () => _goToPly(0),
+        onPrev: () => _goToPly(_currentPly - 1),
+        onNext: () => _goToPly(_currentPly + 1),
+        onEnd: () => _goToPly(totalPlies),
+      ),
+      _MoveListBar(
+        sanList: _sanList,
+        currentPly: _currentPly,
+        feedbackCache: _feedbackCache,
+        scrollController: _listScroll,
+        isHumanPly: _isHumanPly,
+        onTapPly: _goToPly,
+      ),
+    ];
+  }
+
+  List<Widget> _buildLearningSection() {
+    return [
+      _ReviewSummaryPanel(
+        analyzingAll: _analyzingAll,
+        analyzedCount:
+            _analyzingAll ? _analysisDoneCount : _analyzedHumanCount,
+        totalCount:
+            _analyzingAll ? _analysisTotalCount : _humanPlies.length,
+        counts: _summaryCounts(),
+        onAnalyzeGame: _analyzeGame,
+      ),
+      if (_reviewAnalysisComplete)
+        _ReviewLessonsPanel(summary: _lessonSummary()),
+      _CriticalMomentsPanel(
+        moments: _criticalMoments,
+        analysisComplete: _reviewAnalysisComplete,
+        onTapPly: _goToPly,
+      ),
+      _buildFeedbackPanel(),
+    ];
   }
 
   Widget _buildFeedbackPanel() {
