@@ -96,12 +96,23 @@ class CoachService {
         isPlayerWhite,
         movesPlayed,
       );
+      final missedFreeCapture = _isBadQuality(quality)
+          ? _findMissedFreeCapture(
+              beforeFen: beforeFen,
+              playedFrom: from,
+              playedTo: to,
+              isPlayerWhite: isPlayerWhite,
+            )
+          : null;
       final hangingExplanation = hangsAfter.isNotEmpty
           ? _buildLoosePieceExplanation(
               pieceName: _pieceName(gameAfter.get(hangsAfter.first)?.type),
               square: hangsAfter.first,
               suggestion: suggestion,
             )
+          : null;
+      final missedFreeCaptureExplanation = missedFreeCapture != null
+          ? _buildMissedFreeCaptureExplanation(san: missedFreeCapture.san)
           : null;
       final samePieceExplanation = samePieceMovedTwice
           ? _buildSamePieceMovedTwiceExplanation(suggestion: suggestion)
@@ -110,6 +121,7 @@ class CoachService {
           ? _buildEarlyQueenMoveExplanation(suggestion: suggestion)
           : null;
       final explanation = hangingExplanation ??
+          missedFreeCaptureExplanation ??
           samePieceExplanation ??
           earlyQueenExplanation;
 
@@ -290,6 +302,14 @@ class CoachService {
         isPlayerWhite,
         movesPlayed,
       );
+      final missedFreeCapture = _isBadQuality(quality)
+          ? _findMissedFreeCapture(
+              beforeFen: beforeFen,
+              playedFrom: from,
+              playedTo: to,
+              isPlayerWhite: isPlayerWhite,
+            )
+          : null;
 
       final String message;
       if (loosePieceMessage != null && quality.index >= MoveQuality.good.index) {
@@ -321,6 +341,9 @@ class CoachService {
               suggestion: suggestion,
             )
           : null;
+      final missedFreeCaptureExplanation = missedFreeCapture != null
+          ? _buildMissedFreeCaptureExplanation(san: missedFreeCapture.san)
+          : null;
       final samePieceExplanation = samePieceMovedTwice
           ? _buildSamePieceMovedTwiceExplanation(suggestion: suggestion)
           : null;
@@ -329,6 +352,7 @@ class CoachService {
           : null;
       final explanation = loosePieceExplanation ??
           hangingExplanation ??
+          missedFreeCaptureExplanation ??
           samePieceExplanation ??
           earlyQueenExplanation;
 
@@ -786,6 +810,10 @@ class CoachService {
     }
   }
 
+  static bool _isBadQuality(MoveQuality quality) {
+    return quality.index <= MoveQuality.inaccuracy.index;
+  }
+
   static int _pieceValue(ch.PieceType? type) {
     if (type == ch.PieceType.PAWN) return 100;
     if (type == ch.PieceType.KNIGHT) return 320;
@@ -794,6 +822,54 @@ class CoachService {
     if (type == ch.PieceType.QUEEN) return 900;
     if (type == ch.PieceType.KING) return 20000;
     return 0;
+  }
+
+  static ({String san, int capturedValue})? _findMissedFreeCapture({
+    required String beforeFen,
+    required String playedFrom,
+    required String playedTo,
+    required bool isPlayerWhite,
+  }) {
+    try {
+      final game = ch.Chess.fromFEN(beforeFen);
+      final opponentColor =
+          isPlayerWhite ? ch.Color.BLACK : ch.Color.WHITE;
+
+      ({String san, int capturedValue})? bestCapture;
+
+      for (final move in game.generate_moves()) {
+        if (move.fromAlgebraic == playedFrom &&
+            move.toAlgebraic == playedTo) {
+          continue;
+        }
+
+        final capturedPiece = game.get(move.toAlgebraic);
+        if (capturedPiece == null || capturedPiece.color != opponentColor) {
+          continue;
+        }
+
+        final capturedValue = _pieceValue(capturedPiece.type);
+        if (capturedValue < _pieceValue(ch.PieceType.KNIGHT)) continue;
+
+        final afterCapture = ch.Chess.fromFEN(beforeFen);
+        afterCapture.move(move);
+        final targetSquare = ch.Chess.SQUARES[move.toAlgebraic];
+        if (targetSquare == null) continue;
+        if (afterCapture.attacked(opponentColor, targetSquare)) continue;
+
+        final sanClone = ch.Chess.fromFEN(beforeFen);
+        final san = sanClone.move_to_san(move);
+
+        if (bestCapture == null ||
+            capturedValue > bestCapture.capturedValue) {
+          bestCapture = (san: san, capturedValue: capturedValue);
+        }
+      }
+
+      return bestCapture;
+    } catch (_) {
+      return null;
+    }
   }
 
   static ({
@@ -819,6 +895,20 @@ class CoachService {
           : 'Your opponent can capture it and win material.',
       betterIdea: 'Before moving, check whether your pieces are defended.',
       tryInstead: tryText,
+    );
+  }
+
+  static ({
+    String whatHappened,
+    String whyItMatters,
+    String betterIdea,
+    String tryInstead,
+  }) _buildMissedFreeCaptureExplanation({required String san}) {
+    return (
+      whatHappened: 'You missed a free capture.',
+      whyItMatters: 'Your opponent had an undefended piece you could win.',
+      betterIdea: 'Before moving, check if you can safely capture something.',
+      tryInstead: 'Try $san.',
     );
   }
 
