@@ -104,12 +104,24 @@ class CoachService {
               isPlayerWhite: isPlayerWhite,
             )
           : null;
+      final badTrade = _detectBadTrade(
+        gameAfter: gameAfter,
+        movingPiece: movingPiece,
+        capturedPiece: capturedPiece,
+        to: to,
+        isPlayerWhite: isPlayerWhite,
+        quality: quality,
+        isCheckmate: isCheckmate,
+      );
       final hangingExplanation = hangsAfter.isNotEmpty
           ? _buildLoosePieceExplanation(
               pieceName: _pieceName(gameAfter.get(hangsAfter.first)?.type),
               square: hangsAfter.first,
               suggestion: suggestion,
             )
+          : null;
+      final badTradeExplanation = badTrade
+          ? _buildBadTradeExplanation(suggestion: suggestion)
           : null;
       final missedFreeCaptureExplanation = missedFreeCapture != null
           ? _buildMissedFreeCaptureExplanation(san: missedFreeCapture.san)
@@ -120,7 +132,8 @@ class CoachService {
       final earlyQueenExplanation = _isEarlyQueenMove(movingPiece, movesPlayed)
           ? _buildEarlyQueenMoveExplanation(suggestion: suggestion)
           : null;
-      final explanation = hangingExplanation ??
+      final explanation = badTradeExplanation ??
+          hangingExplanation ??
           missedFreeCaptureExplanation ??
           samePieceExplanation ??
           earlyQueenExplanation;
@@ -310,6 +323,15 @@ class CoachService {
               isPlayerWhite: isPlayerWhite,
             )
           : null;
+      final badTrade = _detectBadTrade(
+        gameAfter: gameAfter,
+        movingPiece: movingPiece,
+        capturedPiece: capturedPiece,
+        to: to,
+        isPlayerWhite: isPlayerWhite,
+        quality: effectiveQuality,
+        isCheckmate: isCheckmate,
+      );
 
       final String message;
       if (loosePieceMessage != null && quality.index >= MoveQuality.good.index) {
@@ -341,6 +363,9 @@ class CoachService {
               suggestion: suggestion,
             )
           : null;
+      final badTradeExplanation = badTrade
+          ? _buildBadTradeExplanation(suggestion: suggestion)
+          : null;
       final missedFreeCaptureExplanation = missedFreeCapture != null
           ? _buildMissedFreeCaptureExplanation(san: missedFreeCapture.san)
           : null;
@@ -351,6 +376,7 @@ class CoachService {
           ? _buildEarlyQueenMoveExplanation(suggestion: suggestion)
           : null;
       final explanation = loosePieceExplanation ??
+          badTradeExplanation ??
           hangingExplanation ??
           missedFreeCaptureExplanation ??
           samePieceExplanation ??
@@ -438,6 +464,18 @@ class CoachService {
 
     // P1a: Own piece is now hanging — always check regardless of quality,
     // because any move can incidentally leave a piece en prise.
+    if (_detectBadTrade(
+      gameAfter: gameAfter,
+      movingPiece: movingPiece,
+      capturedPiece: capturedPiece,
+      to: to,
+      isPlayerWhite: isPlayerWhite,
+      quality: quality,
+      isCheckmate: isCheckmate,
+    )) {
+      return '$prefix You made a bad trade.';
+    }
+
     if (hangsAfter.isNotEmpty) {
       final sq = hangsAfter.first;
       final hung = gameAfter.get(sq);
@@ -872,6 +910,30 @@ class CoachService {
     }
   }
 
+  static bool _detectBadTrade({
+    required ch.Chess gameAfter,
+    required ch.Piece? movingPiece,
+    required ch.Piece? capturedPiece,
+    required String to,
+    required bool isPlayerWhite,
+    required MoveQuality quality,
+    required bool isCheckmate,
+  }) {
+    if (isCheckmate || !_isBadQuality(quality)) return false;
+    if (movingPiece == null || capturedPiece == null) return false;
+
+    final movingValue = _pieceValue(movingPiece.type);
+    final capturedValue = _pieceValue(capturedPiece.type);
+    if (movingValue <= capturedValue + 150) return false;
+
+    final targetSquare = ch.Chess.SQUARES[to];
+    if (targetSquare == null) return false;
+
+    final opponentColor =
+        isPlayerWhite ? ch.Color.BLACK : ch.Color.WHITE;
+    return gameAfter.attacked(opponentColor, targetSquare);
+  }
+
   static ({
     String whatHappened,
     String whyItMatters,
@@ -909,6 +971,25 @@ class CoachService {
       whyItMatters: 'Your opponent had an undefended piece you could win.',
       betterIdea: 'Before moving, check if you can safely capture something.',
       tryInstead: 'Try $san.',
+    );
+  }
+
+  static ({
+    String whatHappened,
+    String whyItMatters,
+    String betterIdea,
+    String tryInstead,
+  }) _buildBadTradeExplanation({String? suggestion}) {
+    final tryText = suggestion != null
+        ? 'Try $suggestion instead.'
+        : 'Avoid the capture and look for a safer move.';
+
+    return (
+      whatHappened: 'You made a bad trade.',
+      whyItMatters: 'You gave up a stronger piece for a weaker piece.',
+      betterIdea:
+          'Before capturing, compare piece values and check if your piece will be safe.',
+      tryInstead: tryText,
     );
   }
 
