@@ -957,6 +957,7 @@ class _ReviewCoachPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final meta = _qualityMeta[feedback.quality]!;
+    final hasStructuredExplanation = _hasStructuredExplanation(feedback);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
@@ -992,7 +993,7 @@ class _ReviewCoachPanel extends StatelessWidget {
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
           ),
-          if (_hasStructuredExplanation(feedback)) ...[
+          if (hasStructuredExplanation) ...[
             const SizedBox(height: 8),
             _ExplanationLine(
               label: 'What happened',
@@ -1011,7 +1012,7 @@ class _ReviewCoachPanel extends StatelessWidget {
               text: feedback.tryInstead,
             ),
           ],
-          if (feedback.suggestion != null) ...[
+          if (!hasStructuredExplanation && feedback.suggestion != null) ...[
             const SizedBox(height: 6),
             Row(
               children: [

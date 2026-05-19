@@ -96,7 +96,9 @@ class CoachService {
               square: hangsAfter.first,
               suggestion: suggestion,
             )
-          : null;
+          : _isEarlyQueenMove(movingPiece, movesPlayed)
+              ? _buildEarlyQueenMoveExplanation(suggestion: suggestion)
+              : null;
 
       final message = _buildMessage(
         quality: quality,
@@ -300,7 +302,11 @@ class CoachService {
               suggestion: suggestion,
             )
           : null;
-      final explanation = loosePieceExplanation ?? hangingExplanation;
+      final earlyQueenExplanation = _isEarlyQueenMove(movingPiece, movesPlayed)
+          ? _buildEarlyQueenMoveExplanation(suggestion: suggestion)
+          : null;
+      final explanation =
+          loosePieceExplanation ?? hangingExplanation ?? earlyQueenExplanation;
 
       final tip = _getTip(
         movingPiece?.type, to, movesPlayed, isCapture, isCheck, isCheckmate);
@@ -794,6 +800,29 @@ class CoachService {
           ? 'Your opponent can play $opponentIdea and win $article $pieceName.'
           : 'Your opponent can capture it and win material.',
       betterIdea: 'Before moving, check whether your pieces are defended.',
+      tryInstead: tryText,
+    );
+  }
+
+  static bool _isEarlyQueenMove(ch.Piece? piece, int movesPlayed) {
+    return piece?.type == ch.PieceType.QUEEN && movesPlayed < 8;
+  }
+
+  static ({
+    String whatHappened,
+    String whyItMatters,
+    String betterIdea,
+    String tryInstead,
+  }) _buildEarlyQueenMoveExplanation({String? suggestion}) {
+    final tryText = suggestion != null
+        ? 'Try $suggestion instead.'
+        : 'Look for a developing move like Nf3, Nc3, Bc4, or Bb5.';
+
+    return (
+      whatHappened: 'You brought your queen out early.',
+      whyItMatters:
+          'Your opponent can attack the queen and gain time while developing pieces.',
+      betterIdea: 'Develop your knights and bishops before moving the queen.',
       tryInstead: tryText,
     );
   }
